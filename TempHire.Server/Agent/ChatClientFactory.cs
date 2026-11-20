@@ -33,6 +33,40 @@ namespace TempHire.Server.Agent
         /// <summary>The chat client with the tool loop.  Throws <see cref="AgentNotConfiguredException"/>.</summary>
         public IChatClient Client => _client.Value;
 
+        /// <summary>
+        /// The options for one question: the tools, and with Claude, prompt caching for the
+        /// conversation.
+        ///
+        /// <para>
+        /// A question is several model calls - one per round of the tool loop - and each sends
+        /// everything so far again: the tools, the system prompt, the conversation, and the tool calls
+        /// and results of this question.  Claude's automatic caching (a top-level
+        /// <c>cache_control</c>) caches up to the end of each request, so the next round, and the next
+        /// question within a few minutes, read all of that from the cache and pay full price only for
+        /// what is new.  The breakpoint on the system prompt (<see cref="QuinnAgent"/>) is the second,
+        /// fixed read point.  Ollama runs locally and has no such cache, so it gets the tools only.
+        /// </para>
+        /// </summary>
+        public ChatOptions OptionsFor(IList<AITool> tools)
+        {
+            var options = new ChatOptions { Tools = tools };
+            if (_options.UsesClaude)
+            {
+                // The Anthropic client starts each request from these parameters and adds the
+                // conversation, the system prompt and the tools.  It takes the model and the output
+                // limit from here as they are, so they repeat the client's configuration.
+                options.RawRepresentationFactory = _ => new Anthropic.Models.Messages.MessageCreateParams
+                {
+                    Model = _options.Claude.Model,
+                    MaxTokens = _options.Claude.MaxTokens,
+                    Messages = [],
+                    CacheControl = new Anthropic.Models.Messages.CacheControlEphemeral()
+                };
+            }
+
+            return options;
+        }
+
         private IChatClient Build()
         {
             IChatClient model;

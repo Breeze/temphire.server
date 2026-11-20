@@ -179,9 +179,9 @@ namespace TempHire.Server.Controllers
                     DateOnly.FromDateTime(askedAt.UtcDateTime), tokens, CancellationToken.None);
 
                 _logger.LogInformation(
-                    "Quinn used {InputTokens} input and {OutputTokens} output tokens of {Provider} {Model} in {Reports} model calls, costing {Dollars} dollars",
-                    tokens.InputTokens, tokens.OutputTokens, model.Provider, model.Model, tokens.Reports,
-                    Microdollars.ToDollars(cost));
+                    "Quinn used {InputTokens} input tokens ({CacheReadTokens} read from the cache, {CacheWriteTokens} written to it) and {OutputTokens} output tokens of {Provider} {Model} in {Reports} model calls, costing {Dollars} dollars",
+                    tokens.InputTokens, tokens.CacheReadTokens, tokens.CacheWriteTokens, tokens.OutputTokens,
+                    model.Provider, model.Model, tokens.Reports, Microdollars.ToDollars(cost));
             }
             catch (Exception e)
             {

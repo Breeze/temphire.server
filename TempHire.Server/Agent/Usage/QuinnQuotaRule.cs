@@ -32,7 +32,8 @@ namespace TempHire.Server.Agent.Usage
     /// "Quotas": [
     ///   {
     ///     "Provider": "Claude", "Model": "claude-opus-5-5",
-    ///     "Prices": { "InputPerMillion": 4.00, "OutputPerMillion": 20.00 },
+    ///     "Prices": { "InputPerMillion": 4.00, "OutputPerMillion": 20.00,
+    ///                 "CacheReadPerMillion": 0.20, "CacheWritePerMillion": 5.00 },
     ///     "User": { "Daily": 0.50 }
     ///   },
     ///   {
@@ -95,18 +96,46 @@ namespace TempHire.Server.Agent.Usage
         public static readonly QuinnQuotaRule Unlimited = new();
     }
 
-    /// <summary>A model's prices, in US dollars per million tokens, as the provider lists them.</summary>
+    /// <summary>
+    /// A model's prices, in US dollars per million tokens, as the provider lists them.
+    ///
+    /// <para>
+    /// With prompt caching (Claude), input read from the cache and input written to it have prices
+    /// of their own: on Claude Sonnet 5.5, $0.10 and $2.50 per million against $2.00 for other
+    /// input.  Quinn caches for five minutes, so the write price is the provider's 5-minute price.  A
+    /// price list without them charges cautiously: reads at the full input price, writes at 1.25
+    /// times it, the 5-minute write rate.  So a missing price never makes Quinn look cheaper than it
+    /// is.
+    /// </para>
+    /// </summary>
     public class ModelPrices
     {
+        /// <summary>The 5-minute cache write price, as a multiple of the input price, when none is given.</summary>
+        public const decimal DefaultCacheWriteFactor = 1.25m;
+
         public decimal InputPerMillion { get; set; }
         public decimal OutputPerMillion { get; set; }
 
+        /// <summary>Input read from the prompt cache.  Unset: the input price.</summary>
+        public decimal? CacheReadPerMillion { get; set; }
+
+        /// <summary>Input written to the prompt cache, for five minutes.  Unset: 1.25 times the input price.</summary>
+        public decimal? CacheWritePerMillion { get; set; }
+
         /// <summary>
         /// What the tokens cost, in micro-dollars (millionths of a dollar), rounded up: at $1 per
-        /// million tokens, one token is one micro-dollar.
+        /// million tokens, one token is one micro-dollar.  <paramref name="inputTokens"/> is all the
+        /// input, including what was read from or written to the cache.
         /// </summary>
-        public long CostOf(long inputTokens, long outputTokens) =>
-            (long)Math.Ceiling(inputTokens * InputPerMillion + outputTokens * OutputPerMillion);
+        public long CostOf(long inputTokens, long outputTokens, long cacheReadTokens = 0, long cacheWriteTokens = 0)
+        {
+            var uncachedTokens = inputTokens - cacheReadTokens - cacheWriteTokens;
+            return (long)Math.Ceiling(
+                uncachedTokens * InputPerMillion
+                + cacheReadTokens * (CacheReadPerMillion ?? InputPerMillion)
+                + cacheWriteTokens * (CacheWritePerMillion ?? InputPerMillion * DefaultCacheWriteFactor)
+                + outputTokens * OutputPerMillion);
+        }
     }
 
     /// <summary>Dollar limits per day, week and month; null for no limit.</summary>

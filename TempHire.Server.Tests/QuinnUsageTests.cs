@@ -115,6 +115,65 @@ namespace TempHire.Server.Tests
             // A fraction of a micro-dollar is rounded up, never down.
             Assert.Equal(1, new ModelPrices { InputPerMillion = 0.10m }.CostOf(1, 0));
         }
+
+        /// <summary>Claude Sonnet 5.5's prices, with its cache prices.</summary>
+        private static readonly ModelPrices SonnetWithCache = new()
+        {
+            InputPerMillion = 2m, OutputPerMillion = 10m, CacheReadPerMillion = 0.10m, CacheWritePerMillion = 2.50m
+        };
+
+        [Fact]
+        public void Input_read_from_or_written_to_the_cache_costs_its_own_price()
+        {
+            // The first question measured with caching: two model calls, 5,163 input tokens in all,
+            // of which 2,353 read from the cache and 2,804 written to it, so 6 at the full price.
+            // 6 x 2 + 2,353 x 0.10 + 2,804 x 2.50 + 304 x 10 = 10,297.3 micro-dollars.
+            Assert.Equal(10_298, SonnetWithCache.CostOf(5163, 304, cacheReadTokens: 2353, cacheWriteTokens: 2804));
+
+            // A million tokens read from the cache cost a twentieth of a million at the input price.
+            Assert.Equal(100_000, SonnetWithCache.CostOf(1_000_000, 0, cacheReadTokens: 1_000_000));
+            Assert.Equal(2_500_000, SonnetWithCache.CostOf(1_000_000, 0, cacheWriteTokens: 1_000_000));
+        }
+
+        [Fact]
+        public void A_price_list_without_cache_prices_charges_reads_at_the_input_price_and_writes_at_more()
+        {
+            var noCachePrices = new ModelPrices { InputPerMillion = 2m, OutputPerMillion = 10m };
+
+            Assert.Equal(2_000_000, noCachePrices.CostOf(1_000_000, 0, cacheReadTokens: 1_000_000));
+            Assert.Equal(2_500_000, noCachePrices.CostOf(1_000_000, 0, cacheWriteTokens: 1_000_000));
+        }
+
+        [Fact]
+        public void A_tally_adds_up_cache_reads_and_writes_as_the_anthropic_client_reports_them()
+        {
+            var tally = new TokenTally();
+
+            // As AsIChatClient reports usage: all input in InputTokenCount, reads in
+            // CachedInputTokenCount, writes under CacheCreationInputTokens.
+            tally.Add(new UsageDetails
+            {
+                InputTokenCount = 2357, OutputTokenCount = 55,
+                AdditionalCounts = new() { [TokenTally.CacheWriteCount] = 2353 }
+            });
+            tally.Add(new UsageDetails
+            {
+                InputTokenCount = 2806, CachedInputTokenCount = 2353, OutputTokenCount = 249,
+                AdditionalCounts = new() { [TokenTally.CacheWriteCount] = 451 }
+            });
+
+            Assert.Equal(5163, tally.InputTokens);
+            Assert.Equal(2353, tally.CacheReadTokens);
+            Assert.Equal(2804, tally.CacheWriteTokens);
+            Assert.Equal(304, tally.OutputTokens);
+            Assert.Equal(2, tally.Reports);
+            Assert.Equal(10_298, tally.CostAt(SonnetWithCache));
+
+            // Usage without cache counts (Ollama) is all full-price input.
+            var ollama = new TokenTally();
+            ollama.Add(new UsageDetails { InputTokenCount = 100, OutputTokenCount = 10 });
+            Assert.Equal(0, ollama.CacheReadTokens + ollama.CacheWriteTokens);
+        }
     }
 
     /// <summary>
@@ -177,6 +236,22 @@ namespace TempHire.Server.Tests
             Assert.Equal(75, row.OutputTokens);
             Assert.Equal(1750, row.CostMicrodollars);
             Assert.Equal(2, row.Questions);
+        }
+
+        [Fact]
+        public async Task Cache_reads_and_writes_are_kept_and_charged_at_the_cache_prices()
+        {
+            // The rule has no cache prices: reads at the input price (2), writes at 1.25 times it (2.5).
+            // 300 in, of which 100 read and 100 written: 100 x 2 + 100 x 2 + 100 x 2.5 + 50 x 10 = 1,150.
+            Assert.Equal(1150, await RecordAsync(Anna, Claude, Sonnet, Today, input: 300, output: 50, cacheRead: 100, cacheWrite: 100));
+            Assert.Equal(650, await RecordAsync(Anna, Claude, Sonnet, Today, input: 200, output: 25, cacheRead: 50));
+
+            using var usage = NewUsageContext();
+            var row = await usage.QuinnUsage.SingleAsync();
+            Assert.Equal(500, row.InputTokens);
+            Assert.Equal(150, row.CacheReadTokens);
+            Assert.Equal(100, row.CacheWriteTokens);
+            Assert.Equal(1800, row.CostMicrodollars);
         }
 
         [Fact]
@@ -280,10 +355,17 @@ namespace TempHire.Server.Tests
         private QuinnUsageStore NewStore(QuinnUsageDbContext usage, Model.TempHireDbContext business) =>
             new(usage, business, new FixedOptions(_options));
 
-        private async Task<long> RecordAsync(Guid user, string provider, string model, DateOnly day, long input, long output)
+        private async Task<long> RecordAsync(
+            Guid user, string provider, string model, DateOnly day, long input, long output, long cacheRead = 0, long cacheWrite = 0)
         {
             var tally = new TokenTally();
-            tally.Add(new UsageDetails { InputTokenCount = input, OutputTokenCount = output });
+            tally.Add(new UsageDetails
+            {
+                InputTokenCount = input,
+                CachedInputTokenCount = cacheRead,
+                OutputTokenCount = output,
+                AdditionalCounts = cacheWrite > 0 ? new() { [TokenTally.CacheWriteCount] = cacheWrite } : null
+            });
 
             using var usage = NewUsageContext();
             using var business = _business.NewContext();

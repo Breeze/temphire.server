@@ -41,6 +41,12 @@ namespace TempHire.Server.Migrations.QuinnUsage
                     b.Property<DateOnly>("Day")
                         .HasColumnType("date");
 
+                    b.Property<long>("CacheReadTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("CacheWriteTokens")
+                        .HasColumnType("bigint");
+
                     b.Property<long>("CostMicrodollars")
                         .HasColumnType("bigint");
 
