@@ -44,6 +44,7 @@ from the original Silverlight and WPF versions, and the client side.
 - [Configuration](#configuration)
 - [Layout](#layout)
 - [Known gaps](#known-gaps)
+- [Credits](#credits)
 
 ---
 
@@ -651,3 +652,9 @@ file carries a doc comment naming the file it came from.
 - **The `.sdf` sample databases are not migrated.** The seed data is re-created from the ported
   `SampleDataProvider`, so the original nine people keep their ids (in Harbor Staffing), but any
   data you added to the old SQL Compact files does not come across.
+
+## Credits
+
+The OAuth logo on the sign-in and consent pages (`Views/Shared/_OAuthMark.cshtml`) is by Chris
+Messina, [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/), from
+[oauth.net](https://oauth.net/).
