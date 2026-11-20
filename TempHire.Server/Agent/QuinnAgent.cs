@@ -61,7 +61,7 @@ namespace TempHire.Server.Agent
             var results = new List<FunctionResultContent>();
             await foreach (var update in _chatClients.Client.GetStreamingResponseAsync(
                 Messages(conversation, companyName, userName, canReadStaffingData),
-                new ChatOptions { Tools = [.. tools] },
+                _chatClients.OptionsFor([.. tools]),
                 cancellationToken))
             {
                 // The model's token counts: a streamed response reports them as UsageContent, and
@@ -70,8 +70,10 @@ namespace TempHire.Server.Agent
                 {
                     tokens.Add(usage.Details);
                     _logger.LogDebug(
-                        "Quinn model usage: {InputTokens} in, {OutputTokens} out, {TotalTokens} total",
-                        usage.Details.InputTokenCount, usage.Details.OutputTokenCount, usage.Details.TotalTokenCount);
+                        "Quinn model usage: {InputTokens} in ({CacheReadTokens} read from the cache, {CacheWriteTokens} written to it), {OutputTokens} out",
+                        usage.Details.InputTokenCount, usage.Details.CachedInputTokenCount ?? 0,
+                        usage.Details.AdditionalCounts?.GetValueOrDefault(Usage.TokenTally.CacheWriteCount) ?? 0,
+                        usage.Details.OutputTokenCount);
                 }
 
                 // A tool result: work out the people again from all results so far, since a name
@@ -111,14 +113,25 @@ namespace TempHire.Server.Agent
             return await McpClient.CreateAsync(transport, loggerFactory: _loggerFactory, cancellationToken: cancellationToken);
         }
 
-        /// <summary>The system prompt, then the conversation so far.</summary>
+        /// <summary>
+        /// The system prompt, then the conversation so far.
+        ///
+        /// <para>
+        /// The system prompt carries a prompt-cache breakpoint (Claude only; other clients ignore
+        /// it).  The tools and the system prompt come first in every request and stay the same for a
+        /// user all day, so each of the user's questions reads them from the cache, however the
+        /// conversation goes.  See <see cref="ChatClientFactory.OptionsFor"/> for the conversation's
+        /// own breakpoint.
+        /// </para>
+        /// </summary>
         private static List<ChatMessage> Messages(
             IReadOnlyList<ChatMessage> conversation, string companyName, string userName, bool canReadStaffingData)
         {
-            var messages = new List<ChatMessage>
-            {
-                new(ChatRole.System, QuinnPersona.SystemPrompt(companyName, userName, DateTime.Today, canReadStaffingData))
-            };
+            var systemPrompt = new TextContent(
+                    QuinnPersona.SystemPrompt(companyName, userName, DateTime.Today, canReadStaffingData))
+                .WithCacheControl(new Anthropic.Models.Messages.CacheControlEphemeral());
+
+            var messages = new List<ChatMessage> { new(ChatRole.System, [systemPrompt]) };
             messages.AddRange(conversation);
             return messages;
         }

@@ -32,8 +32,17 @@ namespace TempHire.Server.Agent.Usage
         /// <summary>The day, in UTC.</summary>
         public DateOnly Day { get; set; }
 
-        /// <summary>Tokens sent to the model: system prompt, conversation, tool definitions and results.</summary>
+        /// <summary>
+        /// Tokens sent to the model: system prompt, conversation, tool definitions and results.  All
+        /// of them, including those read from or written to the prompt cache.
+        /// </summary>
         public long InputTokens { get; set; }
+
+        /// <summary>Input tokens read from Claude's prompt cache, at the cheaper cache read price.</summary>
+        public long CacheReadTokens { get; set; }
+
+        /// <summary>Input tokens written to Claude's prompt cache, at the dearer cache write price.</summary>
+        public long CacheWriteTokens { get; set; }
 
         /// <summary>Tokens the model wrote: answers and tool calls.</summary>
         public long OutputTokens { get; set; }

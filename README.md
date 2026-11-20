@@ -31,6 +31,7 @@ from the original Silverlight and WPF versions, and the client side.
   - [Ollama or Claude](#ollama-or-claude)
   - [Setting up Ollama](#setting-up-ollama)
   - [Setting up Claude](#setting-up-claude)
+  - [Prompt caching](#prompt-caching)
   - [Budgets: usage and quotas](#budgets-usage-and-quotas)
 - [Multi-tenancy](#multi-tenancy)
 - [Users and sign-in](#users-and-sign-in)
@@ -286,6 +287,39 @@ shows the model in use.  User secrets are read in the Development environment; i
 `Agent__Claude__ApiKey` from your secret store.  Every copy of the server on a machine shares the
 same user secrets, so a key stored once is used by both clients' servers.
 
+### Prompt caching
+
+With Claude, Quinn uses **prompt caching**: the parts of a request that the previous request also
+sent are read from Anthropic's cache instead of being processed again, at a twentieth of the input
+price on Claude Sonnet 5.5 ($0.10 instead of $2.00 per million tokens).  Writing to the cache costs
+a quarter more than plain input ($2.50), so caching pays off from the first reuse.
+
+Most of Quinn's input is repeated: every model call sends the tool definitions, the system prompt
+and the conversation again, and a question takes at least two calls (one to call a tool, one to
+answer with its results).  Two cache breakpoints cover it:
+
+- **The system prompt** (`QuinnAgent`): the tools and the system prompt come first in every
+  request and stay the same for a user all day, so every question reads them from the cache.
+- **The end of each request** (Claude's automatic caching, set in `ChatClientFactory.OptionsFor`):
+  each round of the tool loop reads everything before it, and pays full price only for what's new.
+
+Entries last five minutes and every read renews them, so a user who keeps asking keeps the cache
+warm.  Measured in the app, two questions in one conversation:
+
+| | Input tokens | Read from cache | Written to cache | Cost | At full input price |
+|---|---|---|---|---|---|
+| "Who knows SQL?", nothing cached yet | 5,163 | 2,353 | 2,804 | $0.0103 | $0.0134 |
+| The same question again within five minutes | 5,163 | 5,157 | 0 | $0.0035 | $0.0133 |
+| A follow-up, "Which of them has the highest rate?" | 5,766 | 4,965 | 795 | $0.0049 | $0.0139 |
+
+A follow-up reads the tools and the system prompt from the cache, but not the earlier question's
+tool round: the client sends back only the text of the conversation.  Ollama runs locally and has
+no such cache; the cache settings don't reach it.
+
+To see the cache at work, set the `TempHire.Server.Agent.QuinnAgent` log level to `Debug`: every
+model call then logs its input tokens, how many were read from and written to the cache, and its
+output.  The question's summary (`Quinn used ...`) is logged at `Information`.
+
 ### Budgets: usage and quotas
 
 Every answer from a paid model costs money, so Quinn has **budgets in US dollars**: per user and
@@ -301,13 +335,15 @@ until it starts over.
 | Each user | $0.50 | $1.25 | $3.00 |
 | Each company | $1.50 | $4.00 | **$10.00** |
 
-A typical question costs about **$0.013**: about 5,400 tokens over two model calls (one to call a
-tool, one to answer with its results), 95% of them input - the system prompt, the tool definitions
-and the tool results, sent again with each call - at $2 per million input and $10 per million
-output tokens.  So a user can ask about **38 questions a day**, 95 a week and 230 a month, and a
-company about **115 a day**, 300 a week and **770 a month**.  Longer conversations cost more per
-question, since the whole conversation is sent each time.  The company's monthly limit is the
-budget; the others keep one day, or one user, from using all of it.
+A typical question is about 5,400 tokens over two model calls (one to call a tool, one to answer
+with its results), 95% of them input - the system prompt, the tool definitions and the tool
+results, sent again with each call.  At the full input price that would be about **$0.013**; with
+[prompt caching](#prompt-caching) it's **$0.004-0.010**, depending on how much is already in the
+cache.  Even at the uncached price a user can ask about **38 questions a day**, 95 a week and 230 a
+month, and a company about **115 a day**, 300 a week and **770 a month**; with caching, two to three
+times as many.  Longer conversations cost more per question, since the whole conversation is sent
+each time.  The company's monthly limit is the budget; the others keep one day, or one user, from
+using all of it.
 
 Ollama costs nothing, so it has no limits; its usage is still counted and shown, in tokens.
 
@@ -319,7 +355,8 @@ Ollama costs nothing, so it has no limits; its usage is still counted and shown,
   ends, however it ends: finished, failed or cancelled.
 - The question's **cost** is worked out from the model's prices in its quota rule, and stored with
   the tokens, in micro-dollars (millionths of a dollar), at the prices of that moment: a later price
-  change doesn't rewrite the past.
+  change doesn't rewrite the past.  Input read from or written to the prompt cache is counted
+  separately (`CacheReadTokens`, `CacheWriteTokens`) and charged at its own price.
 - The counts are rows in `QuinnUsage`, one per company, user, model and UTC day, in the business
   database.  The table has a context of its own (`QuinnUsageDbContext`, `Agent/Usage/`), apart from
   the business model that Breeze publishes, with its own migrations and migrations history table.
@@ -350,12 +387,13 @@ Quinn uses applies:
   {
     "Provider": "Claude",
     "Model": "claude-sonnet-5-5",
-    "Prices": { "InputPerMillion": 2.00, "OutputPerMillion": 10.00 },
+    "Prices": { "InputPerMillion": 2.00, "OutputPerMillion": 10.00,
+                "CacheReadPerMillion": 0.10, "CacheWritePerMillion": 2.50 },
     "User": { "Daily": 0.50, "Weekly": 1.25, "Monthly": 3.00 },
     "Tenant": { "Daily": 1.50, "Weekly": 4.00, "Monthly": 10.00 },
     "Tenants": { "summit.test": { "Monthly": 25.00 } }
   },
-  { "Provider": "Claude", "Prices": { "InputPerMillion": 10.00, "OutputPerMillion": 50.00 }, ... },
+  { "Provider": "Claude", "Prices": { "InputPerMillion": 10.00, "OutputPerMillion": 50.00, ... }, ... },
   { "Provider": "Ollama" }
 ]
 ```
@@ -363,7 +401,10 @@ Quinn uses applies:
 - **`Provider` and `Model`** pick the models a rule applies to; without `Model`, every model of the
   provider.  Put a rule for one model before its provider's rule.  (A list rather than names as
   keys, because Ollama model names contain colons, which .NET configuration can't use in a key.)
-- **`Prices`** are dollars per million tokens, as the provider lists them.
+- **`Prices`** are dollars per million tokens, as the provider lists them.  `CacheReadPerMillion`
+  and `CacheWritePerMillion` are the prompt cache's prices; the write price is the one for
+  5-minute cache writes, which is what Quinn uses.  Left out, they err on the safe side: reads are
+  charged at the input price, writes at 1.25 times it.
 - **`User`** and **`Tenant`** are the dollar limits per day, week and month.  A limit left out or
   `null` is **unlimited**, and a rule without limits makes the model unlimited.
 - **`Tenants`** gives a company a budget of its own, by its email domain - a company on a bigger
@@ -380,15 +421,14 @@ Quinn uses applies:
 **When prices change** - or when you switch Quinn to another model:
 
 1. Look up the model's prices per million input and output tokens on the provider's price list
-   (for Claude, the pricing page in the Claude documentation).
+   (for Claude, the pricing page in the Claude documentation), and for Claude also the cache read
+   and 5-minute cache write prices.
 2. Update `Prices` in the model's rule, or add a rule for a new model, with `Model` set to the
    name in `Agent:Claude:Model`, before the provider-wide rule.
 3. Revisit the limits if the new prices change how far a budget goes; the arithmetic above is the
    one to redo.
 
-Questions asked before the change keep the cost they were recorded at.  Usage features that
-change a call's price - prompt caching, batch pricing - aren't modelled: every input token is
-charged at the full input price, which errs on the safe side.
+Questions asked before the change keep the cost they were recorded at.
 
 **Trying it out.**  To see a budget run out without spending much, lower one for a run, for example
 from PowerShell:

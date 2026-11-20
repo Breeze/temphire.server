@@ -123,8 +123,7 @@ namespace TempHire.Server.Agent.Usage
         public async Task<long> RecordAsync(
             Guid tenantId, Guid userId, string provider, string model, DateOnly day, TokenTally tally, CancellationToken cancellationToken)
         {
-            var cost = QuinnQuotaRule.For(_options.CurrentValue.Quotas, provider, model)
-                .Prices.CostOf(tally.InputTokens, tally.OutputTokens);
+            var cost = tally.CostAt(QuinnQuotaRule.For(_options.CurrentValue.Quotas, provider, model).Prices);
 
             for (var attempt = 0; ; attempt++)
             {
@@ -133,6 +132,8 @@ namespace TempHire.Server.Agent.Usage
                                 && u.Provider == provider && u.Model == model && u.Day == day)
                     .ExecuteUpdateAsync(set => set
                         .SetProperty(u => u.InputTokens, u => u.InputTokens + tally.InputTokens)
+                        .SetProperty(u => u.CacheReadTokens, u => u.CacheReadTokens + tally.CacheReadTokens)
+                        .SetProperty(u => u.CacheWriteTokens, u => u.CacheWriteTokens + tally.CacheWriteTokens)
                         .SetProperty(u => u.OutputTokens, u => u.OutputTokens + tally.OutputTokens)
                         .SetProperty(u => u.CostMicrodollars, u => u.CostMicrodollars + cost)
                         .SetProperty(u => u.Questions, u => u.Questions + 1),
@@ -150,6 +151,8 @@ namespace TempHire.Server.Agent.Usage
                     Model = model,
                     Day = day,
                     InputTokens = tally.InputTokens,
+                    CacheReadTokens = tally.CacheReadTokens,
+                    CacheWriteTokens = tally.CacheWriteTokens,
                     OutputTokens = tally.OutputTokens,
                     CostMicrodollars = cost,
                     Questions = 1
@@ -178,10 +181,29 @@ namespace TempHire.Server.Agent.Usage
     /// The tokens of one question, added up from the usage the model reports.  One question can mean
     /// several model calls - Quinn calls tools, and the model is called again with their results -
     /// and each reports its own usage.
+    ///
+    /// <para>
+    /// With Claude's prompt caching, part of the input is read from the cache and part written to it,
+    /// each at its own price (see <see cref="ModelPrices"/>).  The Anthropic client reports all of
+    /// the input as <see cref="UsageDetails.InputTokenCount"/>, the part read from the cache as
+    /// <see cref="UsageDetails.CachedInputTokenCount"/>, and the part written to it in
+    /// <see cref="UsageDetails.AdditionalCounts"/> under <see cref="CacheWriteCount"/>.
+    /// </para>
     /// </summary>
     public class TokenTally
     {
+        /// <summary>The key the Anthropic client reports cache writes under.</summary>
+        public const string CacheWriteCount = nameof(Anthropic.Models.Messages.Usage.CacheCreationInputTokens);
+
+        /// <summary>All input tokens, however they were billed.</summary>
         public long InputTokens { get; private set; }
+
+        /// <summary>Input tokens read from the prompt cache: part of <see cref="InputTokens"/>.</summary>
+        public long CacheReadTokens { get; private set; }
+
+        /// <summary>Input tokens written to the prompt cache: part of <see cref="InputTokens"/>.</summary>
+        public long CacheWriteTokens { get; private set; }
+
         public long OutputTokens { get; private set; }
 
         /// <summary>How many usage reports were added: with a streamed answer, one per model call.</summary>
@@ -192,8 +214,14 @@ namespace TempHire.Server.Agent.Usage
         public void Add(UsageDetails usage)
         {
             InputTokens += usage.InputTokenCount ?? 0;
+            CacheReadTokens += usage.CachedInputTokenCount ?? 0;
+            CacheWriteTokens += usage.AdditionalCounts?.TryGetValue(CacheWriteCount, out var written) == true ? written : 0;
             OutputTokens += usage.OutputTokenCount ?? 0;
             Reports++;
         }
+
+        /// <summary>What these tokens cost at <paramref name="prices"/>, in micro-dollars.</summary>
+        public long CostAt(ModelPrices prices) =>
+            prices.CostOf(InputTokens, OutputTokens, CacheReadTokens, CacheWriteTokens);
     }
 }
