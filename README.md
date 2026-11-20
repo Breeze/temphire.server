@@ -102,6 +102,22 @@ The client runs the server from there: its README shows how, and its `npm run bu
 the production build into `server/TempHire.Server/wwwroot`, which the server then serves from its
 own origin (see `Program.cs`).
 
+**What differs per client** goes in `server.appsettings.json`, in the client repository's root next
+to `server/`.  The server reads it after `appsettings.json` and the launch profile, so its settings
+win; the command line still wins over it.  The Angular client uses the defaults and has none; the
+React client's lets both versions run side by side, each with its own data:
+
+```json
+{
+  "urls": "http://localhost:5100",
+  "ConnectionStrings": {
+    "TempHire": "Server=(localdb)\\MSSQLLocalDB;Database=TempHireReact;...",
+    "TempHireIdentity": "Server=(localdb)\\MSSQLLocalDB;Database=TempHireReactIdentity;..."
+  },
+  "AllowedClientOrigins": [ "http://localhost:5173" ]
+}
+```
+
 To work on the server from a client repository, change and commit in `server/` as in any clone of
 this repository, push it, and then commit the submodule's new commit in the client repository.
 
@@ -573,6 +589,7 @@ provider, delete them and add a new initial migration (see [The database schema]
 | `Agent:Ollama:*`, `Agent:Claude:Model` | `appsettings.json` | Endpoint and model names |
 | `Agent:Claude:ApiKey` | user secrets, via `Set-ClaudeApiKey.ps1` | **Never in `appsettings.json`** |
 | `Agent:MaxToolCalls` | `appsettings.json` | Tool-calling rounds per question |
+| Any of these, per client | `server.appsettings.json` in the client repository's root | Overrides `appsettings.json` and the launch profile's URL; see [In a client repository](#in-a-client-repository) |
 
 ## Layout
 
