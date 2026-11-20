@@ -100,8 +100,9 @@ namespace TempHire.Server.Tests
             ["ClientRegistration.Register"] = Anonymous,
 
             // Any signed-in user: who they are, the model and lookups the client loads at sign-in,
-            // and Quinn (whose tools check the role for each call).
+            // Quinn (whose tools check the role for each call), and their own Quinn usage.
             ["Account.Me"] = SignedIn,
+            ["Usage.Get"] = SignedIn,
             ["Validation.Metadata"] = SignedIn,
             ["Breeze.Metadata"] = SignedIn,
             ["Breeze.Lookups"] = SignedIn,

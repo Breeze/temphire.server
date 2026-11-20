@@ -18,6 +18,7 @@ using Newtonsoft.Json.Serialization;
 using TempHire.Model;
 using TempHire.Model.Identity;
 using TempHire.Server.Agent;
+using TempHire.Server.Agent.Usage;
 using TempHire.Server.Auth;
 using TempHire.Server.Mcp;
 using TempHire.Server.Persistence;
@@ -80,6 +81,13 @@ builder.Services.AddDbContext<TempHireDbContext>(options =>
 builder.Services.AddDbContext<TempHireIdentityDbContext>(options => options
     .UseSqlServer(builder.Configuration.GetConnectionString("TempHireIdentity"))
     .UseOpenIddict<Guid>());
+
+// Quinn's token usage: a context of its own, apart from the business model Breeze publishes, with
+// its tables in the business database and its own migrations history.  See QuinnUsageDbContext.
+builder.Services.AddDbContext<QuinnUsageDbContext>(options => options
+    .UseSqlServer(
+        builder.Configuration.GetConnectionString("TempHire"),
+        sql => sql.MigrationsHistoryTable(QuinnUsageDbContext.MigrationsHistoryTable)));
 
 // Multi-tenancy: TempHireDbContext asks this for the current tenant, which comes from the
 // tenant_id claim in the access token.  See HttpCurrentTenant and TempHireDbContext.
@@ -326,6 +334,9 @@ builder.Services.AddSingleton<ChatClientFactory>();
 builder.Services.AddScoped<QuinnAgent>();
 builder.Services.AddHttpClient(nameof(QuinnAgent));
 
+// Quinn's token quotas, per user and per company (Agent:Quotas), and the usage they are checked against.
+builder.Services.AddScoped<QuinnUsageStore>();
+
 // ---------------------------------------------------------------------------------------------
 // CORS - the client's dev server runs on a different origin (localhost:4200 for Angular)
 // ---------------------------------------------------------------------------------------------
@@ -385,6 +396,9 @@ using (var scope = app.Services.CreateScope())
     var context = scope.ServiceProvider.GetRequiredService<TempHireDbContext>();
     var identityContext = scope.ServiceProvider.GetRequiredService<TempHireIdentityDbContext>();
     DatabaseSetup.Prepare(context, identityContext, app.Logger);
+
+    // Quinn's usage tables, in the business database, after DatabaseSetup has created it.
+    scope.ServiceProvider.GetRequiredService<QuinnUsageDbContext>().Database.Migrate();
 
     // The client app's registration, kept in step with the configuration.
     await OAuthClients.RegisterSpaAsync(scope.ServiceProvider);
