@@ -18,7 +18,7 @@ namespace TempHire.Server.Agent
             "five ingredients - a spirit, sugar, lemon, water and spice - that taste better together than " +
             "any of them alone. TempHire began life on IdeaBlade's **Punch** framework, which mixed " +
             "Caliburn.Micro, DevForce and Entity Framework in the same spirit. Quinn comes from the Latin " +
-            "*quinque*, five, so the name is a nod to that recipe: today's TempHire mixes Angular, Breeze, " +
+            "*quinque*, five, so the name is a nod to that recipe: today's TempHire mixes Angular or React, Breeze, " +
             ".NET, a database - and Quinn, the fifth ingredient.";
 
         /// <param name="canReadStaffingData">

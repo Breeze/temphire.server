@@ -11,7 +11,7 @@ namespace TempHire.Model
     /// <para>
     /// Breeze reads its metadata straight off this model (see
     /// <c>TempHirePersistenceManager.Metadata()</c>), which is why the fluent configuration below matters:
-    /// whatever you declare here is what the Angular client will validate against.
+    /// whatever you declare here is what the client app will validate against.
     /// </para>
     /// </summary>
     public class TempHireDbContext : DbContext

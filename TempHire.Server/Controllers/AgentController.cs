@@ -11,7 +11,7 @@ using TempHire.Server.Auth;
 namespace TempHire.Server.Controllers
 {
     /// <summary>
-    /// Quinn's endpoint.  The Angular client sends the conversation so far and gets Quinn's answer, in
+    /// Quinn's endpoint.  The client app sends the conversation so far and gets Quinn's answer, in
     /// Markdown.  The agent runs here, on the server, never in the browser: the model, its API key and
     /// the tools stay out of the client's reach.
     ///

@@ -18,7 +18,7 @@ namespace TempHire.Server.Controllers
     /// <para>
     /// In the DevForce version there was no controller at all: the client's <c>EntityManager</c> talked
     /// to the DevForce EntityServer over WCF, and query composition happened client-side against
-    /// <c>EntityQuery&lt;T&gt;</c>.  Breeze keeps the same feel - the Angular client still writes
+    /// <c>EntityQuery&lt;T&gt;</c>.  Breeze keeps the same feel - the client app still writes
     /// <c>EntityQuery.from('StaffingResources').where(...)</c> - but the query travels to the server as
     /// a JSON payload and <c>[BreezeQueryFilter]</c> applies it to the <see cref="IQueryable{T}"/> that
     /// each method returns.

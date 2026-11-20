@@ -130,7 +130,7 @@ namespace TempHire.Server.Controllers
             identity.SetScopes(request.GetScopes());
             identity.SetResources(Resources(request, request.ClientId));
 
-            // Remember the consent (for the Angular app, the sign-in itself), so the user is asked
+            // Remember the consent (for the client app, the sign-in itself), so the user is asked
             // only once per client, and so a refresh token can be revoked with it.
             var authorization = authorizations.LastOrDefault()
                                 ?? await _authorizations.CreateAsync(

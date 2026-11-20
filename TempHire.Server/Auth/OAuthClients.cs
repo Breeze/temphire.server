@@ -4,13 +4,13 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 namespace TempHire.Server.Auth
 {
     /// <summary>
-    /// The OAuth clients TempHire knows: its own Angular app, registered here at startup, and the
+    /// The OAuth clients TempHire knows: its own client app, registered here at startup, and the
     /// MCP clients that register themselves (<c>ClientRegistrationController</c>).
     /// </summary>
     public static class OAuthClients
     {
         /// <summary>
-        /// Registers the Angular app, or brings its registration up to date with the configuration
+        /// Registers the client app, or brings its registration up to date with the configuration
         /// (its redirect URIs follow <c>AllowedClientOrigins</c> and the server's origins).
         /// </summary>
         public static async Task RegisterSpaAsync(IServiceProvider services, CancellationToken cancellationToken = default)

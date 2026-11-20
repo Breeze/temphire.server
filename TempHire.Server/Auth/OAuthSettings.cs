@@ -9,12 +9,12 @@ namespace TempHire.Server.Auth
     /// protected resources, each identified by a URI as RFC 8707 requires:
     /// </para>
     /// <list type="bullet">
-    ///   <item><c>{origin}/api</c>: the Breeze, account and agent endpoints the Angular app calls.</item>
+    ///   <item><c>{origin}/api</c>: the Breeze, account and agent endpoints the client app calls.</item>
     ///   <item><c>{origin}/mcp</c>: the MCP endpoint, for Quinn and for any other MCP client.</item>
     /// </list>
     /// <para>
     /// A token's audience names the resources it may be used at, and each resource accepts only
-    /// tokens issued for it (see <see cref="AudienceCheck"/>).  The Angular app's tokens are issued
+    /// tokens issued for it (see <see cref="AudienceCheck"/>).  The client app's tokens are issued
     /// for both, because Quinn passes the user's token on to the MCP endpoint.  A token an MCP client
     /// such as Claude Code obtains is issued for the MCP endpoint only, so it cannot be used to call
     /// the Breeze API.
@@ -30,7 +30,7 @@ namespace TempHire.Server.Auth
     {
         public const string SectionName = "OAuth";
 
-        /// <summary>The Angular app, a public client: it has no secret and proves itself with PKCE.</summary>
+        /// <summary>The client app, a public client: it has no secret and proves itself with PKCE.</summary>
         public const string SpaClientId = "temphire-spa";
 
         /// <summary>Access to the company's staffing data, through the API or the MCP endpoint.</summary>
@@ -39,13 +39,13 @@ namespace TempHire.Server.Auth
         public const string ApiPath = "/api";
         public const string McpPath = "/mcp";
 
-        /// <summary>Where the authorization server sends the browser back to the Angular app.</summary>
+        /// <summary>Where the authorization server sends the browser back to the client app.</summary>
         public const string SpaCallbackPath = "/auth/callback";
 
         /// <summary>The server's public origins, without a trailing slash.</summary>
         public IReadOnlyList<string> Origins { get; }
 
-        /// <summary>The origins the Angular app is served from: the dev server, and the server itself.</summary>
+        /// <summary>The origins the client app is served from: the dev server, and the server itself.</summary>
         public IReadOnlyList<string> SpaOrigins { get; }
 
         public OAuthSettings(IConfiguration configuration)

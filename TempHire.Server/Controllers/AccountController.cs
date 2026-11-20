@@ -46,7 +46,7 @@ namespace TempHire.Server.Controllers
     // Program.cs hands the whole MVC pipeline to Json.NET via Breeze's
     // JsonSerializationFns.UpdateWithDefaults, which sets ContractResolver.NamingStrategy = null - so
     // by default property names go out verbatim, in PascalCase.  Breeze *needs* that: entity property
-    // names on the wire have to match the CLR names in the metadata, and the Angular client converts
+    // names on the wire have to match the CLR names in the metadata, and the client app converts
     // them itself with NamingConvention.camelCase.
     //
     // The account endpoints are not Breeze endpoints.  The client reads them with a plain HttpClient

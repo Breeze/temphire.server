@@ -115,7 +115,7 @@ builder.Services.AddIdeaBladeValidation(v => v
 // OAuth 2.1 - the replacement for the DevForce login session
 //
 // The server is its own authorization server, built with OpenIddict.  Every client signs the user
-// in the same way, with the Authorization Code flow and PKCE: the Angular app, Claude Code, any
+// in the same way, with the Authorization Code flow and PKCE: the client app, Claude Code, any
 // MCP client.  The user enters the password on the server's sign-in page (SignInController), never
 // in a client; the client gets an access token and a refresh token.
 //
@@ -311,9 +311,9 @@ builder.Services.AddScoped<QuinnAgent>();
 builder.Services.AddHttpClient(nameof(QuinnAgent));
 
 // ---------------------------------------------------------------------------------------------
-// CORS - the Angular dev server runs on a different origin (localhost:4200)
+// CORS - the client's dev server runs on a different origin (localhost:4200 for Angular)
 // ---------------------------------------------------------------------------------------------
-const string DevCorsPolicy = "AngularDevServer";
+const string DevCorsPolicy = "ClientDevServer";
 builder.Services.AddCors(options =>
     options.AddPolicy(DevCorsPolicy, policy => policy
         .WithOrigins(
@@ -370,7 +370,7 @@ using (var scope = app.Services.CreateScope())
     var identityContext = scope.ServiceProvider.GetRequiredService<TempHireIdentityDbContext>();
     DatabaseSetup.Prepare(context, identityContext, app.Logger);
 
-    // The Angular app's client registration, kept in step with the configuration.
+    // The client app's registration, kept in step with the configuration.
     await OAuthClients.RegisterSpaAsync(scope.ServiceProvider);
 }
 
@@ -391,12 +391,12 @@ app.MapControllers();
 // The MCP endpoint.  RequireAuthorization: no valid access token for the MCP endpoint, no tools (401).
 app.MapMcp("/mcp").RequireAuthorization();
 
-// Serve the production Angular build when it has been copied into wwwroot
+// Serve the production client build when it has been copied into wwwroot
 // (see `npm run build` in the client project).  Harmless when wwwroot is empty.
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-// Anything else is the Angular app - except the server's own paths, which answer 404 when nothing
+// Anything else is the client app - except the server's own paths, which answer 404 when nothing
 // is there.  OAuth clients probe several metadata addresses in turn (RFC 8414, OpenID Connect,
 // RFC 9728) and move on at a 404; handed index.html instead, they would give up.
 foreach (var serverPath in new[] { "/.well-known", "/connect", "/api", "/mcp" })

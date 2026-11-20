@@ -1,0 +1,12 @@
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# The client's production build, copied in by its `npm run build:server`
+TempHire.Server/wwwroot/
+
+# Local config
+appsettings.Local.json
+*.local.json

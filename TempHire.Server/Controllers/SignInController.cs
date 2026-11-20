@@ -11,7 +11,7 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 namespace TempHire.Server.Controllers
 {
     /// <summary>
-    /// TempHire's sign-in page: where every client - the Angular app, Claude Code, any MCP client -
+    /// TempHire's sign-in page: where every client - TempHire's own app, Claude Code, any MCP client -
     /// sends the user to enter their password.  Port of the Angular login page, and before it of
     /// <c>LoginViewModel</c>, now served by the authorization server, because with OAuth the client
     /// never sees the password.
@@ -19,7 +19,7 @@ namespace TempHire.Server.Controllers
     /// <para>
     /// A successful sign-in sets a cookie for this server only and returns to the authorization
     /// endpoint, which issues the client its code.  The cookie is what lets the user sign in once
-    /// and then authorize the Angular app and an MCP client without typing the password again.
+    /// and then authorize the client app and an MCP client without typing the password again.
     /// </para>
     /// </summary>
     [Route("account")]

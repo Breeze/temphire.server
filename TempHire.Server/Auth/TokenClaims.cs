@@ -67,7 +67,7 @@ namespace TempHire.Server.Auth
                 .SetClaims(Claims.Role, [.. await _users.GetRolesAsync(user)]);
 
             // Everything goes into the access token, which the API and the MCP endpoint read.  No
-            // identity token is issued: the Angular app asks api/account/me who signed in.
+            // identity token is issued: the client app asks api/account/me who signed in.
             identity.SetDestinations(_ => [Destinations.AccessToken]);
             return identity;
         }
