@@ -23,12 +23,14 @@ namespace TempHire.Server.Agent
         private readonly ChatClientFactory _chatClients;
         private readonly IHttpClientFactory _httpClients;
         private readonly ILoggerFactory _loggerFactory;
+        private readonly ILogger<QuinnAgent> _logger;
 
         public QuinnAgent(ChatClientFactory chatClients, IHttpClientFactory httpClients, ILoggerFactory loggerFactory)
         {
             _chatClients = chatClients;
             _httpClients = httpClients;
             _loggerFactory = loggerFactory;
+            _logger = loggerFactory.CreateLogger<QuinnAgent>();
         }
 
         /// <summary>
@@ -36,6 +38,12 @@ namespace TempHire.Server.Agent
         /// answer can mention - see <see cref="ToolResultPeople"/> - each time a tool returns more of
         /// them.  The tools run before the model writes its answer, so the people normally arrive
         /// before the text that names them, and nothing streams while the tools run.
+        ///
+        /// <para>
+        /// The tokens the model reports go into <paramref name="tokens"/> as they arrive: one usage
+        /// report per model call, and a question can take several (the tool loop).  The caller records
+        /// them when the answer ends, however it ends.
+        /// </para>
         /// </summary>
         public async IAsyncEnumerable<QuinnUpdate> AskStreamingAsync(
             IReadOnlyList<ChatMessage> conversation,
@@ -44,6 +52,7 @@ namespace TempHire.Server.Agent
             string companyName,
             string userName,
             bool canReadStaffingData,
+            Usage.TokenTally tokens,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
             await using var mcp = await ConnectAsync(mcpEndpoint, accessToken, cancellationToken);
@@ -55,6 +64,16 @@ namespace TempHire.Server.Agent
                 new ChatOptions { Tools = [.. tools] },
                 cancellationToken))
             {
+                // The model's token counts: a streamed response reports them as UsageContent, and
+                // the tool loop passes on each model call's.
+                foreach (var usage in update.Contents.OfType<UsageContent>())
+                {
+                    tokens.Add(usage.Details);
+                    _logger.LogDebug(
+                        "Quinn model usage: {InputTokens} in, {OutputTokens} out, {TotalTokens} total",
+                        usage.Details.InputTokenCount, usage.Details.OutputTokenCount, usage.Details.TotalTokenCount);
+                }
+
                 // A tool result: work out the people again from all results so far, since a name
                 // that fit one person can fit two once another tool has answered.
                 var newResults = update.Contents.OfType<FunctionResultContent>().ToList();

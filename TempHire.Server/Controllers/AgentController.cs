@@ -5,6 +5,7 @@ using Microsoft.Extensions.AI;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 using TempHire.Server.Agent;
+using TempHire.Server.Agent.Usage;
 using TempHire.Server.Auth;
 
 namespace TempHire.Server.Controllers
@@ -37,12 +38,14 @@ namespace TempHire.Server.Controllers
 
         private readonly QuinnAgent _agent;
         private readonly ChatClientFactory _chatClients;
+        private readonly QuinnUsageStore _usage;
         private readonly ILogger<AgentController> _logger;
 
-        public AgentController(QuinnAgent agent, ChatClientFactory chatClients, ILogger<AgentController> logger)
+        public AgentController(QuinnAgent agent, ChatClientFactory chatClients, QuinnUsageStore usage, ILogger<AgentController> logger)
         {
             _agent = agent;
             _chatClients = chatClients;
+            _usage = usage;
             _logger = logger;
         }
 
@@ -66,10 +69,35 @@ namespace TempHire.Server.Controllers
         /// running, no API key - still answers with an error status.  A failure after that can only
         /// be reported in the stream, as an <c>error</c> line.
         /// </para>
+        /// <para>
+        /// Quotas: a question is refused (429) while the user or their company has used up a daily,
+        /// weekly or monthly token quota (<c>Agent:Quotas</c>).  Once a question is let through it is
+        /// answered in full, so a quota can be overrun by the last question's tokens.  The tokens are
+        /// recorded when the answer ends, however it ends - finished, failed or cancelled - since the
+        /// model calls made so far have been paid for either way.
+        /// </para>
         /// </summary>
         [HttpPost]
         public async Task<IActionResult> Chat([FromBody] ChatRequest request, CancellationToken cancellationToken)
         {
+            if (UsageCaller.From(User) is not { } caller)
+            {
+                return Forbid();
+            }
+
+            // The model that will answer; its usage and quotas are its own.
+            var model = new UsageModel(_chatClients.Options.CurrentProvider, _chatClients.Options.CurrentModel);
+
+            var now = DateTimeOffset.UtcNow;
+            var usage = await _usage.ReportAsync(caller.TenantId, caller.UserId, model.Provider, model.Model, now, cancellationToken);
+            if (usage.Current?.Exceeded() is { } exceeded)
+            {
+                Response.Headers.RetryAfter = ((int)Math.Ceiling((exceeded.Period.ResetsAt - now).TotalSeconds)).ToString();
+                return StatusCode(
+                    StatusCodes.Status429TooManyRequests,
+                    new ErrorResult { Message = QuotaMessages.Refusal(exceeded.Period, exceeded.IsCompany, usage.CompanyName, now) });
+            }
+
             var conversation = (request?.Messages ?? [])
                 .Where(m => !string.IsNullOrWhiteSpace(m?.Content))
                 .TakeLast(MaxMessages)
@@ -83,6 +111,7 @@ namespace TempHire.Server.Controllers
                 return BadRequest(new ErrorResult { Message = "Ask Quinn a question." });
             }
 
+            var tokens = new TokenTally();
             var updates = _agent.AskStreamingAsync(
                     conversation,
                     new Uri($"{Request.Scheme}://{Request.Host}/mcp"),
@@ -90,6 +119,7 @@ namespace TempHire.Server.Controllers
                     CompanyName,
                     User.Identity?.Name ?? "a TempHire user",
                     TempHirePolicies.CanRead(User),
+                    tokens,
                     cancellationToken)
                 .GetAsyncEnumerator(cancellationToken);
 
@@ -125,8 +155,42 @@ namespace TempHire.Server.Controllers
             finally
             {
                 await updates.DisposeAsync();
+                await RecordAsync(caller, model, now, tokens);
             }
         }
+
+        /// <summary>
+        /// Adds the question's tokens to the user's usage of the model.  Not cancellable: the request
+        /// may already be cancelled (the user closed the pane), but the tokens were used.  A failure
+        /// here is logged rather than shown: the user has their answer.
+        /// </summary>
+        private async Task RecordAsync(UsageCaller caller, UsageModel model, DateTimeOffset askedAt, TokenTally tokens)
+        {
+            if (tokens.Reports == 0)
+            {
+                // The model was never reached (Ollama not running, no API key) - or it reported no usage.
+                return;
+            }
+
+            try
+            {
+                var cost = await _usage.RecordAsync(
+                    caller.TenantId, caller.UserId, model.Provider, model.Model,
+                    DateOnly.FromDateTime(askedAt.UtcDateTime), tokens, CancellationToken.None);
+
+                _logger.LogInformation(
+                    "Quinn used {InputTokens} input and {OutputTokens} output tokens of {Provider} {Model} in {Reports} model calls, costing {Dollars} dollars",
+                    tokens.InputTokens, tokens.OutputTokens, model.Provider, model.Model, tokens.Reports,
+                    Microdollars.ToDollars(cost));
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Quinn's token usage could not be recorded.");
+            }
+        }
+
+        /// <summary>The provider and model a question is answered with.</summary>
+        private record UsageModel(string Provider, string Model);
 
         /// <summary>Sends one update and flushes it, so the client sees it now.</summary>
         private async Task WriteLineAsync(QuinnUpdate update, CancellationToken cancellationToken)

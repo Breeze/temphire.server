@@ -31,6 +31,7 @@ from the original Silverlight and WPF versions, and the client side.
   - [Ollama or Claude](#ollama-or-claude)
   - [Setting up Ollama](#setting-up-ollama)
   - [Setting up Claude](#setting-up-claude)
+  - [Budgets: usage and quotas](#budgets-usage-and-quotas)
 - [Multi-tenancy](#multi-tenancy)
 - [Users and sign-in](#users-and-sign-in)
   - [Using TempHire's MCP server from Claude Code](#using-temphires-mcp-server-from-claude-code)
@@ -284,6 +285,119 @@ powershell -ExecutionPolicy Bypass -File .\Set-ClaudeApiKey.ps1 -UseClaude
 shows the model in use.  User secrets are read in the Development environment; in production, set
 `Agent__Claude__ApiKey` from your secret store.  Every copy of the server on a machine shares the
 same user secrets, so a key stored once is used by both clients' servers.
+
+### Budgets: usage and quotas
+
+Every answer from a paid model costs money, so Quinn has **budgets in US dollars**: per user and
+per company (tenant), per day, week and month, for each model.  While one is used up, Quinn takes no
+new questions from that user (or anyone in that company) until it starts over.  The clients show
+where everyone stands on a usage page, and Quinn's pane says which budget is used up and how long
+until it starts over.
+
+**The budgets as shipped** (`Agent:Quotas` in `appsettings.json`), for Claude Sonnet 5.5:
+
+| | Daily | Weekly | Monthly |
+|---|---|---|---|
+| Each user | $0.50 | $1.25 | $3.00 |
+| Each company | $1.50 | $4.00 | **$10.00** |
+
+A typical question costs about **$0.013**: about 5,400 tokens over two model calls (one to call a
+tool, one to answer with its results), 95% of them input - the system prompt, the tool definitions
+and the tool results, sent again with each call - at $2 per million input and $10 per million
+output tokens.  So a user can ask about **38 questions a day**, 95 a week and 230 a month, and a
+company about **115 a day**, 300 a week and **770 a month**.  Longer conversations cost more per
+question, since the whole conversation is sent each time.  The company's monthly limit is the
+budget; the others keep one day, or one user, from using all of it.
+
+Ollama costs nothing, so it has no limits; its usage is still counted and shown, in tokens.
+
+**How usage is counted.**
+
+- The model reports the tokens of every call it answers (Microsoft.Extensions.AI's
+  `UsageContent`, which both providers send on a streamed answer, once per model call).
+  `QuinnAgent` adds them up for the question, and `AgentController` records them when the answer
+  ends, however it ends: finished, failed or cancelled.
+- The question's **cost** is worked out from the model's prices in its quota rule, and stored with
+  the tokens, in micro-dollars (millionths of a dollar), at the prices of that moment: a later price
+  change doesn't rewrite the past.
+- The counts are rows in `QuinnUsage`, one per company, user, model and UTC day, in the business
+  database.  The table has a context of its own (`QuinnUsageDbContext`, `Agent/Usage/`), apart from
+  the business model that Breeze publishes, with its own migrations and migrations history table.
+  Each question adds to its row in a single `UPDATE ... SET x = x + n`, so parallel questions can't
+  lose counts.  A week or a month is the sum of at most 31 rows.
+- Days, weeks (from Monday) and months are in **UTC**, so a budget starts over at midnight UTC: in
+  the late afternoon or evening in the Americas.
+
+**Before a question**, `AgentController.Chat` reads where the user and their company stand with the
+model that would answer.  If a budget is used up it answers **429** with `Retry-After`, and a
+message that names it and the wait: *"You've used up your daily Quinn allowance ($0.50).  You can
+ask again in 6 hours and 41 minutes, when it starts over at midnight UTC."*
+`GET api/usage` reports the same figures to the clients: per model, today, this week and this
+month, for the user and for the company, in dollars and tokens, with the limits.
+
+**A slight overrun is expected, and fine.**  A question is checked *before* it starts and then
+answered in full, so the question that crosses a limit finishes - a user at $0.49 of $0.50 gets
+their answer, and ends the day at about $0.50.  Questions that are already under way when a limit
+is reached finish too.  In practice a budget can be overrun by about one question per user who was
+asking at the time: a cent or two.  Stopping in the middle of an answer would save that cent and
+lose the answer it paid for.
+
+**Configuring the budgets.**  `Agent:Quotas` is a list of rules; the first that matches the model
+Quinn uses applies:
+
+```json
+"Quotas": [
+  {
+    "Provider": "Claude",
+    "Model": "claude-sonnet-5-5",
+    "Prices": { "InputPerMillion": 2.00, "OutputPerMillion": 10.00 },
+    "User": { "Daily": 0.50, "Weekly": 1.25, "Monthly": 3.00 },
+    "Tenant": { "Daily": 1.50, "Weekly": 4.00, "Monthly": 10.00 },
+    "Tenants": { "summit.test": { "Monthly": 25.00 } }
+  },
+  { "Provider": "Claude", "Prices": { "InputPerMillion": 10.00, "OutputPerMillion": 50.00 }, ... },
+  { "Provider": "Ollama" }
+]
+```
+
+- **`Provider` and `Model`** pick the models a rule applies to; without `Model`, every model of the
+  provider.  Put a rule for one model before its provider's rule.  (A list rather than names as
+  keys, because Ollama model names contain colons, which .NET configuration can't use in a key.)
+- **`Prices`** are dollars per million tokens, as the provider lists them.
+- **`User`** and **`Tenant`** are the dollar limits per day, week and month.  A limit left out or
+  `null` is **unlimited**, and a rule without limits makes the model unlimited.
+- **`Tenants`** gives a company a budget of its own, by its email domain - a company on a bigger
+  plan, say.  Only the limits it names replace the rule's `Tenant` limits.
+- **The second Claude rule is a safety net.**  A Claude model without a rule of its own is charged
+  at the highest Claude price under the same budget, so switching Quinn to another model can never
+  make it free or overspend the budget; it only gets fewer questions until it has its own rule with
+  its real prices.  A model that no rule matches at all is free and unlimited, so give every paid
+  provider a rule.
+- **Changes apply at once:** the rules are read on every check, and `appsettings.json` is reloaded
+  when it changes, so there's no restart.  Settings from environment variables or user secrets are
+  read at startup, as usual.
+
+**When prices change** - or when you switch Quinn to another model:
+
+1. Look up the model's prices per million input and output tokens on the provider's price list
+   (for Claude, the pricing page in the Claude documentation).
+2. Update `Prices` in the model's rule, or add a rule for a new model, with `Model` set to the
+   name in `Agent:Claude:Model`, before the provider-wide rule.
+3. Revisit the limits if the new prices change how far a budget goes; the arithmetic above is the
+   one to redo.
+
+Questions asked before the change keep the cost they were recorded at.  Usage features that
+change a call's price - prompt caching, batch pricing - aren't modelled: every input token is
+charged at the full input price, which errs on the safe side.
+
+**Trying it out.**  To see a budget run out without spending much, lower one for a run, for example
+from PowerShell:
+
+```powershell
+$env:Agent__Quotas__0__User__Daily = '0.01'; dotnet run --project TempHire.Server
+```
+
+One question then uses up the day, and Quinn's pane counts down to midnight UTC.
 
 ---
 
@@ -545,7 +659,9 @@ constraint, or a serializable transaction around validating and writing.
 
 The schema is managed with **EF Core migrations**, in `TempHire.Model/Migrations/`
 (`TempHire/` and `Identity/`, one set per database).  On startup, `DatabaseSetup.Prepare` applies
-any pending migrations to both databases and then seeds them.  A database created by an earlier
+any pending migrations to both databases and then seeds them.  Quinn's usage table has a set of its
+own, in `TempHire.Server/Migrations/QuinnUsage/`, applied to the business database right after (see
+[Budgets: usage and quotas](#budgets-usage-and-quotas)).  A database created by an earlier
 version of this sample with `EnsureCreated()` has no migration history; it is **dropped and
 re-created**, losing its data.
 
@@ -565,6 +681,8 @@ dotnet ef migrations add <Name> --context TempHireDbContext --project TempHire.M
 ```
 
 For the identity database, use `--context TempHireIdentityDbContext` and `--output-dir Migrations/Identity`.
+For Quinn's usage table, use `--context QuinnUsageDbContext --project TempHire.Server` and
+`--output-dir Migrations/QuinnUsage`.
 
 The next server start applies it.  To start over with fresh sample data, drop the database
 (`dotnet ef database drop --context TempHireDbContext --project TempHire.Model --startup-project TempHire.Server`)
@@ -583,11 +701,11 @@ The server targets SQL Server through `Microsoft.EntityFrameworkCore.SqlServer`.
 instance instead of LocalDB, change the two connection strings in
 `TempHire.Server/appsettings.json`.
 
-To move to another provider, swap the package in `TempHire.Model.csproj` and the two
+To move to another provider, swap the package in `TempHire.Model.csproj` and the three
 `options.UseSqlServer(...)` calls in `Program.cs`. Nothing else in the model is SQL Server-specific
 apart from `[Column(TypeName = "decimal(18,2)")]` on `Rate.Amount`.
 
-The migrations in `TempHire.Model/Migrations/` are generated for SQL Server; after switching
+The migrations in `TempHire.Model/Migrations/` and `TempHire.Server/Migrations/` are generated for SQL Server; after switching
 provider, delete them and add a new initial migration (see [The database schema](#the-database-schema)).
 
 ## Configuration
@@ -603,6 +721,7 @@ provider, delete them and add a new initial migration (see [The database schema]
 | `Agent:Ollama:*`, `Agent:Claude:Model` | `appsettings.json` | Endpoint and model names |
 | `Agent:Claude:ApiKey` | user secrets, via `Set-ClaudeApiKey.ps1` | **Never in `appsettings.json`** |
 | `Agent:MaxToolCalls` | `appsettings.json` | Tool-calling rounds per question |
+| `Agent:Quotas` | `appsettings.json` | Per model: prices, and dollar limits per user and company per day, week and month; see [Budgets: usage and quotas](#budgets-usage-and-quotas) |
 | Any of these, per client | `server.appsettings.json` in the client repository's root | Overrides `appsettings.json` and the launch profile's URL; see [In a client repository](#in-a-client-repository) |
 
 ## Layout
@@ -630,8 +749,11 @@ temphire.server/
 │   │   ├── AuthorizationController.cs  # OAuth: authorize, token, logout
 │   │   ├── ClientRegistrationController.cs  # OAuth: MCP clients register
 │   │   ├── SignInController.cs   # the sign-in page
-│   │   └── AgentController.cs    # Quinn: info / chat
+│   │   ├── AgentController.cs    # Quinn: info / chat, with the budget check
+│   │   └── UsageController.cs    # Quinn's usage and budgets for the signed-in user
 │   ├── Agent/                 # Quinn: persona, chat client factory, agent
+│   │   └── Usage/             # budgets: quota rules, usage table and its DbContext, store
+│   ├── Migrations/QuinnUsage/ # the usage table's migrations
 │   ├── Mcp/                   # MCP server tools (StaffingTools)
 │   ├── Persistence/
 │   │   ├── TempHirePersistenceManager.cs   # ← DomainModel/SaveInterceptor.cs
@@ -659,6 +781,10 @@ file carries a doc comment naming the file it came from.
   `OpenIddictApplications`; there is no expiry or admin screen yet.
 - **No Client ID Metadata Documents.**  The newest MCP specification prefers them to dynamic
   registration.  OpenIddict 8 plans both; this server offers dynamic registration only.
+- **Quinn's budgets are configuration only.**  There is no screen to change a company's budget or
+  the prices, and prices must be updated by hand when the provider changes them; see
+  [Budgets: usage and quotas](#budgets-usage-and-quotas).  Budgets start over at midnight UTC, not in
+  the company's time zone, and a budget can be overrun by the questions under way when it runs out.
 - **Search has no paging.** `StaffingResourceListItems` returns every match, exactly as
   `StaffingResourceSearchService.Simple` did. `[BreezeQueryFilter(MaxTake = ...)]` is the place to
   add a cap.

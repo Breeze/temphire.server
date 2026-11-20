@@ -24,10 +24,19 @@ namespace TempHire.Server.Agent
 
         public OllamaOptions Ollama { get; set; } = new();
 
+        /// <summary>How many tokens Quinn may use with each model, per user and per company.  See <see cref="Usage.QuinnQuotaRule"/>.</summary>
+        public List<Usage.QuinnQuotaRule> Quotas { get; set; } = [];
+
         public bool UsesClaude => string.Equals(Provider, "Claude", StringComparison.OrdinalIgnoreCase);
 
         /// <summary>The model that answers, for display.</summary>
         public string ModelLabel => UsesClaude ? Claude.Model : $"{Ollama.Model} via Ollama";
+
+        /// <summary>The provider that answers: <c>Claude</c> or <c>Ollama</c>.  Usage and quotas are per provider and model.</summary>
+        public string CurrentProvider => UsesClaude ? "Claude" : "Ollama";
+
+        /// <summary>The model that answers, as the provider names it.</summary>
+        public string CurrentModel => UsesClaude ? Claude.Model : Ollama.Model;
     }
 
     public class ClaudeOptions
