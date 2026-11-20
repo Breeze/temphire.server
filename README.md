@@ -402,12 +402,25 @@ Two Identity roles, `TempHireRoles`:
 | **Reader** | yes | yes, read-only | no | yes |
 | no role | yes | no | no | no |
 
-- **The server enforces them.**  The roles are signed into the token.  The Breeze queries for the
-  company's data (`StaffingResources`, `StaffingResourceListItems` and the child collections) need
-  Editor or Reader; the metadata and the shared lookups only need a signed-in user, because the
-  client loads them at sign-in.  Saving needs Editor, checked in the save interceptor
-  (`TempHirePersistenceManager.EnsureMaySave`) for every save through Breeze, and answered with
-  `403 Forbidden` otherwise.
+- **The server enforces them, endpoint by endpoint.**  The roles are signed into the token, and
+  every endpoint declares who may call it, through the policies in `TempHirePolicies`:
+
+  | Who | Endpoints |
+  |---|---|
+  | Anyone | The sign-in page, `connect/authorize`, `connect/token`, `connect/logout`, `connect/register`, the metadata under `.well-known`, the client app's own files |
+  | Any signed-in user | `api/account/me`; the Breeze metadata and the shared lookups, which the client loads at sign-in; the validation metadata; Quinn's `api/agent/*`; connecting to `/mcp` |
+  | Editor or Reader (`ReadStaffingData`) | The Breeze queries for the company's data: `StaffingResources`, `StaffingResourceListItems` and the child collections; MCP tool calls |
+  | Editor (`EditStaffingData`) | `api/breeze/SaveChanges` |
+
+  Anyone else gets `401` (not signed in) or `403 Forbidden` (signed in, wrong role).
+- **Deny by default.**  A fallback policy requires a signed-in user for any endpoint that doesn't
+  say, so a new endpoint without `[Authorize]` is closed rather than open; what must work before
+  sign-in says `[AllowAnonymous]`.  `AuthorizationRulesTests` lists every controller action with
+  its rule, so a new endpoint fails the tests until someone decides who may call it.
+- **Checked twice where it matters.**  The save interceptor (`TempHirePersistenceManager`) refuses
+  a save by anyone but an editor again, and the MCP server's call-tool filter refuses a tool call
+  by a user with neither role.  They use the same `TempHirePolicies.CanEdit` and `CanRead` as the
+  policies, so the rules live in one place.
 - **The clients follow them**, from the roles `api/account/me` returns: they keep Resource
   Management to editors and readers, and leave out what a reader may not do.  None of that is
   security; it only keeps a client from offering what the server refuses.
@@ -627,7 +640,7 @@ temphire.server/
 │   ├── Auth/                  # OAuth settings and clients, token claims, audience check, current tenant
 │   ├── Views/                 # the sign-in and consent pages
 │   └── Program.cs
-└── TempHire.Server.Tests/     # saves, concurrency and save-time rules (dotnet test)
+└── TempHire.Server.Tests/     # saves, concurrency, save-time rules, who may call what (dotnet test)
 ```
 
 The `←` marks name what each part replaces in the original WPF version, in the

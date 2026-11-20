@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OpenIddict.Abstractions;
 using OpenIddict.Server.AspNetCore;
@@ -27,6 +28,9 @@ namespace TempHire.Server.Controllers
     /// the cookie either.
     /// </para>
     /// </summary>
+    // Anonymous: OpenIddict authenticates these requests itself (the client, the code or refresh
+    // token), and Authorize checks the sign-in cookie.
+    [AllowAnonymous]
     [ApiExplorerSettings(IgnoreApi = true)]
     public class AuthorizationController : Controller
     {

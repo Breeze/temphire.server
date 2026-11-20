@@ -4,7 +4,7 @@ using Breeze.Persistence.EFCore;
 using ValidationService = IdeaBlade.Validation.ValidationService;
 using Newtonsoft.Json.Linq;
 using TempHire.Model;
-using TempHire.Model.Identity;
+using TempHire.Server.Auth;
 
 // Both Breeze and EF Core define an `EntityState`, and they are not the same enum: this file works
 // with Breeze's, which describes what the *client* sent in the save bundle.
@@ -115,7 +115,7 @@ namespace TempHire.Server.Persistence
         /// </summary>
         private void EnsureMaySave()
         {
-            if (_principal?.IsInRole(TempHireRoles.Editor) != true)
+            if (!TempHirePolicies.CanEdit(_principal))
             {
                 throw new UnauthorizedAccessException("Only editors can save changes. You have read-only access.");
             }

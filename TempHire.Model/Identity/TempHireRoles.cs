@@ -15,9 +15,6 @@ namespace TempHire.Model.Identity
         public const string Editor = "Editor";
         public const string Reader = "Reader";
 
-        /// <summary>The roles that may read the staffing data, for <c>[Authorize(Roles = ...)]</c>.</summary>
-        public const string ReadStaffingData = Editor + "," + Reader;
-
         /// <summary>Every role, in the order they are seeded.</summary>
         public static readonly string[] All = [Editor, Reader];
     }
