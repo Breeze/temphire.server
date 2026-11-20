@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TempHire.Model.Identity;
 using TempHire.Model.SampleData;
@@ -22,6 +23,8 @@ namespace TempHire.Server.Controllers
     /// and then authorize the client app and an MCP client without typing the password again.
     /// </para>
     /// </summary>
+    // Anonymous by nature: the page where users sign in.
+    [AllowAnonymous]
     [Route("account")]
     [ApiExplorerSettings(IgnoreApi = true)]
     public class SignInController : Controller

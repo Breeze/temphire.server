@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.AI;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
-using TempHire.Model.Identity;
 using TempHire.Server.Agent;
 using TempHire.Server.Auth;
 
@@ -90,7 +89,7 @@ namespace TempHire.Server.Controllers
                     AccessToken,
                     CompanyName,
                     User.Identity?.Name ?? "a TempHire user",
-                    User.IsInRole(TempHireRoles.Editor) || User.IsInRole(TempHireRoles.Reader),
+                    TempHirePolicies.CanRead(User),
                     cancellationToken)
                 .GetAsyncEnumerator(cancellationToken);
 

@@ -6,8 +6,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json.Linq;
 using TempHire.Model;
-using TempHire.Model.Identity;
 using TempHire.Model.Projections;
+using TempHire.Server.Auth;
 using TempHire.Server.Persistence;
 
 namespace TempHire.Server.Controllers
@@ -30,10 +30,11 @@ namespace TempHire.Server.Controllers
     /// model to an anonymous caller either.
     /// </para>
     /// <para>
-    /// Roles: the company's staffing data needs the Editor or Reader role (the actions marked
-    /// <c>TempHireRoles.ReadStaffingData</c>).  The metadata and the shared lookups only need a
-    /// signed-in user, because the client loads them at sign-in whatever the user's role.  Saving
-    /// needs the Editor role, which <see cref="TempHirePersistenceManager"/> checks for every save.
+    /// Roles (see <see cref="TempHirePolicies"/>): the company's staffing data needs the Editor or
+    /// Reader role (<see cref="TempHirePolicies.ReadStaffingData"/>), and saving needs the Editor role
+    /// (<see cref="TempHirePolicies.EditStaffingData"/>).  The metadata and the shared lookups only
+    /// need a signed-in user, because the client loads them at sign-in whatever the user's role.
+    /// <see cref="TempHirePersistenceManager"/> checks the Editor role again for every save.
     /// </para>
     /// </summary>
     [Route("api/breeze/[action]")]
@@ -73,9 +74,11 @@ namespace TempHire.Server.Controllers
 
         /// <summary>
         /// The single write endpoint.  Replaces DevForce's <c>EntityManager.SaveChangesAsync</c> round
-        /// trip; the change set arrives as a Breeze "save bundle".
+        /// trip; the change set arrives as a Breeze "save bundle".  Editors only: anyone else gets
+        /// 403 before the bundle is read.
         /// </summary>
         [HttpPost]
+        [Authorize(Policy = TempHirePolicies.EditStaffingData)]
         public async Task<ActionResult<SaveResult>> SaveChanges([FromBody] JObject saveBundle, CancellationToken cancellationToken)
         {
             return await PersistenceManager.SaveChangesAsync(saveBundle, cancellationToken: cancellationToken);
@@ -87,7 +90,7 @@ namespace TempHire.Server.Controllers
         /// second trip.  Breeze lets the client add its own <c>.expand(...)</c> on top of this.
         /// </summary>
         [HttpGet]
-        [Authorize(Roles = TempHireRoles.ReadStaffingData)]
+        [Authorize(Policy = TempHirePolicies.ReadStaffingData)]
         public IQueryable<StaffingResource> StaffingResources()
         {
             return Context.StaffingResources
@@ -96,23 +99,23 @@ namespace TempHire.Server.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = TempHireRoles.ReadStaffingData)]
+        [Authorize(Policy = TempHirePolicies.ReadStaffingData)]
         public IQueryable<Address> Addresses() => Context.Addresses;
 
         [HttpGet]
-        [Authorize(Roles = TempHireRoles.ReadStaffingData)]
+        [Authorize(Policy = TempHirePolicies.ReadStaffingData)]
         public IQueryable<PhoneNumber> PhoneNumbers() => Context.PhoneNumbers;
 
         [HttpGet]
-        [Authorize(Roles = TempHireRoles.ReadStaffingData)]
+        [Authorize(Policy = TempHirePolicies.ReadStaffingData)]
         public IQueryable<Rate> Rates() => Context.Rates;
 
         [HttpGet]
-        [Authorize(Roles = TempHireRoles.ReadStaffingData)]
+        [Authorize(Policy = TempHirePolicies.ReadStaffingData)]
         public IQueryable<Skill> Skills() => Context.Skills;
 
         [HttpGet]
-        [Authorize(Roles = TempHireRoles.ReadStaffingData)]
+        [Authorize(Policy = TempHirePolicies.ReadStaffingData)]
         public IQueryable<WorkExperienceItem> WorkExperienceItems() => Context.WorkExperienceItems;
 
         [HttpGet]
@@ -169,7 +172,7 @@ namespace TempHire.Server.Controllers
         /// </para>
         /// </summary>
         [HttpGet]
-        [Authorize(Roles = TempHireRoles.ReadStaffingData)]
+        [Authorize(Policy = TempHirePolicies.ReadStaffingData)]
         public IQueryable<StaffingResourceListItem> StaffingResourceListItems(string searchText = null)
         {
             var query = Context.StaffingResources.AsQueryable();

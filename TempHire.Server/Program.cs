@@ -256,7 +256,9 @@ builder.Services
         };
     });
 
-builder.Services.AddAuthorization();
+// Who may call what: see TempHirePolicies.  Deny by default - an endpoint without [Authorize] or
+// [AllowAnonymous] still needs a signed-in user.
+builder.Services.AddAuthorization(options => options.AddTempHirePolicies());
 
 // Dynamic client registration is open to anyone, so it is rate limited per IP address.
 builder.Services.AddRateLimiter(options =>
@@ -300,7 +302,7 @@ builder.Services
     // the one about its name - but every tool call answers that the user has no access.  The model
     // gets that as the tool's result and passes it on, rather than being left to guess.
     .WithRequestFilters(filters => filters.AddCallToolFilter(next => async (context, cancellationToken) =>
-        context.User?.IsInRole(TempHireRoles.Editor) == true || context.User?.IsInRole(TempHireRoles.Reader) == true
+        TempHirePolicies.CanRead(context.User)
             ? await next(context, cancellationToken)
             : new ModelContextProtocol.Protocol.CallToolResult
             {
@@ -393,6 +395,13 @@ if (app.Environment.IsDevelopment())
     app.UseDeveloperExceptionPage();
 }
 
+// Serve the production client build when it has been copied into wwwroot (see `npm run build` in
+// the client project).  Harmless when wwwroot is empty.  Before routing and authorization: the
+// app's own files are public - it signs the user in once it is running - and the fallback policy
+// (TempHirePolicies) would otherwise ask for a signed-in user for every script and stylesheet.
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.UseRouting();
 app.UseCors(DevCorsPolicy);
 app.UseRateLimiter();
@@ -402,22 +411,19 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-// The MCP endpoint.  RequireAuthorization: no valid access token for the MCP endpoint, no tools (401).
+// The MCP endpoint.  RequireAuthorization: no valid access token for the MCP endpoint, no tools
+// (401).  Any signed-in user may connect; the call-tool filter above checks the role for each call.
 app.MapMcp("/mcp").RequireAuthorization();
-
-// Serve the production client build when it has been copied into wwwroot
-// (see `npm run build` in the client project).  Harmless when wwwroot is empty.
-app.UseDefaultFiles();
-app.UseStaticFiles();
 
 // Anything else is the client app - except the server's own paths, which answer 404 when nothing
 // is there.  OAuth clients probe several metadata addresses in turn (RFC 8414, OpenID Connect,
-// RFC 9728) and move on at a 404; handed index.html instead, they would give up.
+// RFC 9728) and move on at a 404; handed index.html instead, they would give up.  Both are open
+// to anonymous callers: a 404 says nothing, and the app has to load before it can sign in.
 foreach (var serverPath in new[] { "/.well-known", "/connect", "/api", "/mcp" })
 {
-    app.Map(serverPath + "/{**rest}", () => Results.NotFound());
+    app.Map(serverPath + "/{**rest}", () => Results.NotFound()).AllowAnonymous();
 }
 
-app.MapFallbackToFile("index.html");
+app.MapFallbackToFile("index.html").AllowAnonymous();
 
 app.Run();

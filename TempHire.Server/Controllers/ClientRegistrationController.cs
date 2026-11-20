@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using OpenIddict.Abstractions;
@@ -36,6 +37,8 @@ namespace TempHire.Server.Controllers
     /// for Breeze, which would add <c>$id</c> and <c>$type</c> to an RFC-defined document.
     /// </para>
     /// </summary>
+    // Anonymous, as RFC 7591 intends: a client registers before anyone has signed in to it.
+    [AllowAnonymous]
     [ApiController]
     [ApiExplorerSettings(IgnoreApi = true)]
     public class ClientRegistrationController : ControllerBase
