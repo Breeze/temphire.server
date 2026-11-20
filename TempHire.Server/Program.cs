@@ -26,6 +26,20 @@ using TempHire.Server.Validation;
 var builder = WebApplication.CreateBuilder(args);
 
 // ---------------------------------------------------------------------------------------------
+// The client's settings
+//
+// Each TempHire client has this repository as a submodule in its server/ folder, and sets what
+// differs for it - the server's URL, its databases, its dev server's origin - in
+// server.appsettings.json in its own root, next to server/.  They override appsettings.json and
+// the launch profile's URL; the command line still has the last word.
+// ---------------------------------------------------------------------------------------------
+builder.Configuration
+    .AddJsonFile(
+        Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "..", "server.appsettings.json")),
+        optional: true)
+    .AddCommandLine(args);
+
+// ---------------------------------------------------------------------------------------------
 // MVC + Breeze serialization
 //
 // Breeze speaks Json.NET, not System.Text.Json: it relies on $id / $ref reference handling and on
