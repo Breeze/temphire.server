@@ -67,6 +67,17 @@
                 radial-gradient(circle at 50% 55%, #3a86c8 0, var(--accent) 70%, #12385a 100%);
             box-shadow: inset 0 -3px 6px rgba(0, 0, 0, 0.25), 0 2px 4px rgba(15, 47, 77, 0.25), 0 8px 18px rgba(15, 47, 77, 0.22);
             text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+            position: relative;
+        }
+
+        /* The OAuth logo at the bottom right of the orb (_OAuthMark), as the clients' orbs wear their framework's. */
+        .oauth-mark {
+            position: absolute;
+            right: -12%;
+            bottom: -12%;
+            width: 52%;
+            height: 52%;
+            filter: drop-shadow(0 1px 2px rgba(15, 47, 77, 0.5));
         }
 
         .brand-name {
@@ -159,7 +170,7 @@
 <body>
     <main class="page">
         <div class="brand">
-            <span class="orb" aria-hidden="true">T</span>
+            <span class="orb" aria-hidden="true">T<partial name="_OAuthMark" /></span>
             <span class="brand-name">TempHire</span>
             <span class="tagline">Staffing data, made easy to work with</span>
         </div>
