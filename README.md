@@ -754,7 +754,7 @@ provider, delete them and add a new initial migration (see [The database schema]
 |---|---|---|
 | `ConnectionStrings:TempHire` | `appsettings.json` | Business data |
 | `ConnectionStrings:TempHireIdentity` | `appsettings.json` | Users (ASP.NET Core Identity) — a separate database, as in the original |
-| Token signing and encryption keys | `Program.cs` | **Development certificates**, which OpenIddict creates in the current user's certificate store; outside Development the server starts only once you load real ones (`AddSigningCertificate`, `AddEncryptionCertificate`) |
+| `OAuth:SigningCertificate`, `OAuth:EncryptionCertificate` (`Path`, `Password`) | secret store or environment | OpenIddict's token keys, as PFX files.  **Required outside Development**, where the server won't start without them; in Development it uses development certificates in the current user's store instead.  Self-signed is fine; the signing key needs DigitalSignature, the encryption key KeyEncipherment (`Auth/OAuthCertificates.cs`) |
 | `OAuth:Origins` | `appsettings.json` (optional) | The server's public origins, which name the token audiences; defaults to the URLs it listens on.  Set it behind a proxy |
 | `AllowedClientOrigins` | `appsettings.json` | CORS allow-list for the client's dev server, and where the app's OAuth redirect URIs may point |
 | `Agent:Provider` | `appsettings.json`, or user secrets via `Set-ClaudeApiKey.ps1` | `Ollama` (default) or `Claude` |

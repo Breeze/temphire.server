@@ -184,11 +184,18 @@ builder.Services.AddOpenIddict()
         if (builder.Environment.IsDevelopment())
         {
             // Signing and encryption keys: development certificates, created in the current user's
-            // certificate store on first run.  Anywhere real, load proper certificates instead
-            // (AddSigningCertificate / AddEncryptionCertificate).
+            // certificate store on first run.
             options
                 .AddDevelopmentEncryptionCertificate()
                 .AddDevelopmentSigningCertificate();
+        }
+        else
+        {
+            // Anywhere else, PFX files named in configuration (OAuth:SigningCertificate and
+            // OAuth:EncryptionCertificate): the same keys on every instance and after every restart.
+            options
+                .AddEncryptionCertificate(OAuthCertificates.Load(builder.Configuration, OAuthCertificates.Encryption))
+                .AddSigningCertificate(OAuthCertificates.Load(builder.Configuration, OAuthCertificates.Signing));
         }
 
         // Plain signed JWTs rather than encrypted ones, so a token can be read at jwt.io while
