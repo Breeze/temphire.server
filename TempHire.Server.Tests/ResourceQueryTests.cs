@@ -1,7 +1,7 @@
-using System.Data.Common;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using TempHire.Server.Controllers;
+using TempHire.Server.Mcp;
 using Xunit;
 
 namespace TempHire.Server.Tests
@@ -63,17 +63,24 @@ namespace TempHire.Server.Tests
             Assert.Equal(6, commands.Readers);
         }
 
-        /// <summary>Counts the queries a context sends.</summary>
-        private sealed class CommandCounter : DbCommandInterceptor
+        /// <summary>
+        /// Quinn's <c>get_staffing_resource</c> projects the same five collections: one query to find the
+        /// person by name, then a split query, one for the person and one per collection.
+        /// </summary>
+        [Fact]
+        public async Task Quinn_loads_a_resource_with_one_query_per_collection()
         {
-            public int Readers { get; private set; }
+            var (resource, _, _) = _db.StoreValidResource();
+            var commands = new CommandCounter();
+            using var context = _db.NewContext(commands);
 
-            public override InterceptionResult<DbDataReader> ReaderExecuting(
-                DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result)
-            {
-                Readers++;
-                return result;
-            }
+            var result = await new StaffingTools(context).GetStaffingResource($"{resource.FirstName} {resource.LastName}");
+
+            var json = JsonSerializer.SerializeToElement(result);
+            Assert.True(json.GetProperty("found").GetBoolean());
+            Assert.Equal("Seattle", Assert.Single(json.GetProperty("addresses").EnumerateArray()).GetProperty("City").GetString());
+            Assert.Equal("(206) 555-1234", Assert.Single(json.GetProperty("phoneNumbers").EnumerateArray()).GetProperty("number").GetString());
+            Assert.Equal(1 + 6, commands.Readers);
         }
     }
 }
