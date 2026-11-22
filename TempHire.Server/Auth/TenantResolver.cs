@@ -10,8 +10,8 @@ namespace TempHire.Server.Auth
     /// <para>
     /// Nothing on the user record names the tenant; this rule is applied at every sign-in.  It holds
     /// for local accounts and for users of an external identity provider alike: with Microsoft Entra
-    /// ID, for example, the email domain is one the company has verified.  Every sign-in path calls
-    /// this before <see cref="TokenService.CreateToken"/>.
+    /// ID, for example, the email domain is one the company has verified.  <see cref="TokenClaims"/>
+    /// calls this whenever a token is issued or refreshed.
     /// </para>
     /// </summary>
     public class TenantResolver

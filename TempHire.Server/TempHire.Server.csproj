@@ -22,10 +22,6 @@
     <PackageReference Include="OllamaSharp" Version="5.5.2" />
     <PackageReference Include="OpenIddict.AspNetCore" Version="7.9.0" />
     <PackageReference Include="OpenIddict.EntityFrameworkCore" Version="7.9.0" />
-    <!-- Referenced explicitly because TokenService.cs uses JwtSecurityToken /
-         JwtSecurityTokenHandler directly.  The version must be >= the one
-         Microsoft.AspNetCore.Authentication.JwtBearer pulls in transitively, or NuGet
-         reports NU1605 (package downgrade). -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.15">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

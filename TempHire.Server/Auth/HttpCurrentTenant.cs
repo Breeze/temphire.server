@@ -7,7 +7,7 @@ namespace TempHire.Server.Auth
     ///
     /// <para>
     /// The tenant is decided once, at sign-in, from the email domain of the user name, and signed
-    /// into the token (see <see cref="TokenService"/>).  Nothing the client sends afterwards - no
+    /// into the token (see <see cref="TokenClaims"/>).  Nothing the client sends afterwards - no
     /// parameter, no header, no field of an entity, no instruction to Quinn - can change it.
     /// <c>TempHireDbContext</c> reads it for its query filter and its save checks.
     /// </para>

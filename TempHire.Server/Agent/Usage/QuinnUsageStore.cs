@@ -209,8 +209,6 @@ namespace TempHire.Server.Agent.Usage
         /// <summary>How many usage reports were added: with a streamed answer, one per model call.</summary>
         public int Reports { get; private set; }
 
-        public long TotalTokens => InputTokens + OutputTokens;
-
         public void Add(UsageDetails usage)
         {
             InputTokens += usage.InputTokenCount ?? 0;
