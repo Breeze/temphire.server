@@ -11,7 +11,7 @@ namespace TempHire.Model
     /// A user belongs to the tenant whose <see cref="EmailDomain"/> matches the domain of their user
     /// name: <c>anna@harbor.test</c> belongs to the tenant with domain <c>harbor.test</c>.  The match
     /// is made once, at sign-in, and the tenant's id goes into the access token (see
-    /// <c>TokenService</c>).  The id is a GUID rather than the domain itself, so a company can
+    /// <c>TokenClaims</c>).  The id is a GUID rather than the domain itself, so a company can
     /// change its domain without its data changing hands.
     /// </para>
     /// </summary>
