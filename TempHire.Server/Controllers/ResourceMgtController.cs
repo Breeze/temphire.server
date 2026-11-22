@@ -13,8 +13,14 @@ using TempHire.Server.Persistence;
 namespace TempHire.Server.Controllers
 {
     /// <summary>
-    /// The whole data-access surface of the app.
+    /// The Resource Management workspace's data: its queries, its search and its saves.  The client's
+    /// <c>ResourceMgtUnitOfWork</c> talks to this controller and no other.
     ///
+    /// <para>
+    /// One controller per client workspace, so that a bigger app doesn't end up with one controller
+    /// full of unrelated endpoints.  What every workspace needs is elsewhere: the model's metadata
+    /// (<see cref="ModelController"/>) and the lookups loaded at sign-in (<see cref="LookupsController"/>).
+    /// </para>
     /// <para>
     /// In the DevForce version there was no controller at all: the client's <c>EntityManager</c> talked
     /// to the DevForce EntityServer over WCF, and query composition happened client-side against
@@ -23,30 +29,23 @@ namespace TempHire.Server.Controllers
     /// a JSON payload and <c>[BreezeQueryFilter]</c> applies it to the <see cref="IQueryable{T}"/> that
     /// each method returns.
     /// </para>
-    ///
-    /// <para>
-    /// <c>[Authorize]</c> is the replacement for <c>[RequiresAuthentication]</c> on the DevForce
-    /// <c>EntityBase</c>, and it covers <see cref="Metadata"/> too - DevForce would not hand out the
-    /// model to an anonymous caller either.
-    /// </para>
     /// <para>
     /// Roles (see <see cref="TempHirePolicies"/>): the company's staffing data needs the Editor or
     /// Reader role (<see cref="TempHirePolicies.ReadStaffingData"/>), and saving needs the Editor role
-    /// (<see cref="TempHirePolicies.EditStaffingData"/>).  The metadata and the shared lookups only
-    /// need a signed-in user, because the client loads them at sign-in whatever the user's role.
-    /// <see cref="TempHirePersistenceManager"/> checks the Editor role again for every save.
+    /// (<see cref="TempHirePolicies.EditStaffingData"/>).  <see cref="TempHirePersistenceManager"/>
+    /// checks the Editor role again for every save.
     /// </para>
     /// </summary>
-    [Route("api/breeze/[action]")]
+    [Route("api/resourcemgt/[action]")]
     [BreezeQueryFilter]
     [Authorize]
-    public class BreezeController : ControllerBase
+    public class ResourceMgtController : ControllerBase
     {
         private readonly TempHireDbContext _dbContext;
         private readonly ValidationService _validation;
         private TempHirePersistenceManager _persistenceManager;
 
-        public BreezeController(TempHireDbContext dbContext, ValidationService validation)
+        public ResourceMgtController(TempHireDbContext dbContext, ValidationService validation)
         {
             _dbContext = dbContext;
             _validation = validation;
@@ -62,19 +61,8 @@ namespace TempHire.Server.Controllers
         private TempHireDbContext Context => _dbContext;
 
         /// <summary>
-        /// The Breeze metadata the client's MetadataStore is built from - generated from the EF Core
-        /// model.  This is the replacement for DevForce's <c>.ibmmx</c> model file plus the code
-        /// generation that produced <c>TempHireEntities</c>.
-        /// </summary>
-        [HttpGet]
-        public string Metadata()
-        {
-            return PersistenceManager.Metadata();
-        }
-
-        /// <summary>
-        /// The single write endpoint.  Replaces DevForce's <c>EntityManager.SaveChangesAsync</c> round
-        /// trip; the change set arrives as a Breeze "save bundle".  Editors only: anyone else gets
+        /// The workspace's write endpoint.  Replaces DevForce's <c>EntityManager.SaveChangesAsync</c>
+        /// round trip; the change set arrives as a Breeze "save bundle".  Editors only: anyone else gets
         /// 403 before the bundle is read.
         /// </summary>
         [HttpPost]
@@ -124,46 +112,6 @@ namespace TempHire.Server.Controllers
         [HttpGet]
         [Authorize(Policy = TempHirePolicies.ReadStaffingData)]
         public IQueryable<WorkExperienceItem> WorkExperienceItems() => Context.WorkExperienceItems;
-
-        [HttpGet]
-        public IQueryable<AddressType> AddressTypes() => Context.AddressTypes;
-
-        [HttpGet]
-        public IQueryable<PhoneNumberType> PhoneNumberTypes() => Context.PhoneNumberTypes;
-
-        [HttpGet]
-        public IQueryable<RateType> RateTypes() => Context.RateTypes;
-
-        [HttpGet]
-        public IQueryable<State> States() => Context.States;
-
-        /// <summary>
-        /// One-shot load of every lookup table.
-        ///
-        /// <para>
-        /// This is the replacement for <c>TempHire/GlobalCache.cs</c> plus
-        /// <c>GlobalCacheRepository&lt;T&gt;</c>.  DevForce kept a separate, long-lived EntityManager
-        /// full of lookup entities and seeded every new manager from it
-        /// (<c>QueryStrategy.CacheOnly</c>).  Breeze does the same thing more directly: the client
-        /// fetches this bundle once at login into a "master" EntityManager, and every sandbox manager is
-        /// created as a copy of it.  See <c>entity-manager-provider.ts</c>.
-        /// </para>
-        /// </summary>
-        [HttpGet]
-        public LookupBundle Lookups()
-        {
-            // This returns a bundle rather than an IQueryable, so there is nothing for the query filter
-            // to apply; tell it to stand down.
-            this.SkipBreezeQueryFilter();
-
-            return new LookupBundle
-            {
-                AddressTypes = Context.AddressTypes.OrderBy(t => t.DisplayName).ToList(),
-                PhoneNumberTypes = Context.PhoneNumberTypes.OrderBy(t => t.Name).ToList(),
-                RateTypes = Context.RateTypes.OrderBy(t => t.Sequence).ToList(),
-                States = Context.States.OrderBy(s => s.Name).ToList()
-            };
-        }
 
         /// <summary>
         /// Backs the search grid.  Port of <c>DomainServices/Services/StaffingResourceSearchService.cs</c>,
@@ -231,18 +179,5 @@ namespace TempHire.Server.Controllers
                     PhoneNumber = "(" + x.PrimaryPhone.AreaCode + ") " + x.PrimaryPhone.Number
                 });
         }
-    }
-
-    /// <summary>
-    /// Shape of the <c>Lookups</c> response.  Each collection is materialised into the client's master
-    /// EntityManager, which then seeds every sandbox manager - the Breeze equivalent of DevForce's
-    /// global cache.
-    /// </summary>
-    public class LookupBundle
-    {
-        public IEnumerable<AddressType> AddressTypes { get; set; }
-        public IEnumerable<PhoneNumberType> PhoneNumberTypes { get; set; }
-        public IEnumerable<RateType> RateTypes { get; set; }
-        public IEnumerable<State> States { get; set; }
     }
 }

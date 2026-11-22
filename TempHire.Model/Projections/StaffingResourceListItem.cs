@@ -7,7 +7,7 @@ namespace TempHire.Model.Projections
     /// <para>
     /// Breeze has no equivalent marker: a query that returns a non-entity type simply comes back as
     /// plain JSON, which the client treats as a DTO.  <c>FullName</c> and <c>PhoneNumber</c> are
-    /// composed in the LINQ projection (see <c>BreezeController.StaffingResourceListItems</c>) rather
+    /// composed in the LINQ projection (see <c>ResourceMgtController.StaffingResourceListItems</c>) rather
     /// than in calculated properties, so that they can be sorted and filtered by the database.
     /// </para>
     /// </summary>

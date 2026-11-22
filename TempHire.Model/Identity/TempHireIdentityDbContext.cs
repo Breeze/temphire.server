@@ -10,7 +10,7 @@ namespace TempHire.Model.Identity
     ///
     /// <para>
     /// A database of its own, as the original's security store was (TempHire.Security.sdf).  It never
-    /// reaches the client: <c>BreezeController</c> works on <c>TempHireDbContext</c> only, so none of
+    /// reaches the client: the Breeze controllers work on <c>TempHireDbContext</c> only, so none of
     /// these types is in the Breeze metadata, and no tenant filter applies here - users are looked up
     /// before anyone is signed in.
     /// </para>
