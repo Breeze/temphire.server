@@ -123,7 +123,12 @@ namespace TempHire.Server.Mcp
             }
 
             var id = matches[0].Id;
+
+            // A split query: one SQL query for the person and one per collection.  As one query, the
+            // JOINs would multiply the rows (addresses x phone numbers x rates x skills x work history),
+            // and EF Core warns about it.
             return await _db.StaffingResources.AsNoTracking()
+                .AsSplitQuery()
                 .Where(r => r.Id == id)
                 .Select(r => new
                 {
