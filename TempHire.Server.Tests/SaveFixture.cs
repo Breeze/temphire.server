@@ -3,6 +3,7 @@ using Breeze.Persistence;
 using IdeaBlade.Validation;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json.Linq;
 using TempHire.Model;
@@ -57,10 +58,14 @@ namespace TempHire.Server.Tests
             _connection.Dispose();
         }
 
-        /// <summary>A context on the test tenant's behalf, as a signed-in user of it would have.</summary>
-        public TempHireDbContext NewContext()
+        /// <summary>
+        /// A context on the test tenant's behalf, as a signed-in user of it would have, optionally with
+        /// interceptors that watch its commands.
+        /// </summary>
+        public TempHireDbContext NewContext(params IInterceptor[] interceptors)
         {
-            var db = new TempHireDbContext(new DbContextOptionsBuilder<TempHireDbContext>().UseSqlite(_connection).Options);
+            var db = new TempHireDbContext(
+                new DbContextOptionsBuilder<TempHireDbContext>().UseSqlite(_connection).AddInterceptors(interceptors).Options);
             db.UseTenant(Tenant);
             return db;
         }
