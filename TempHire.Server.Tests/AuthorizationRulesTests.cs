@@ -104,26 +104,26 @@ namespace TempHire.Server.Tests
             ["Account.Me"] = SignedIn,
             ["Usage.Get"] = SignedIn,
             ["Validation.Metadata"] = SignedIn,
-            ["Breeze.Metadata"] = SignedIn,
-            ["Breeze.Lookups"] = SignedIn,
-            ["Breeze.AddressTypes"] = SignedIn,
-            ["Breeze.PhoneNumberTypes"] = SignedIn,
-            ["Breeze.RateTypes"] = SignedIn,
-            ["Breeze.States"] = SignedIn,
+            ["Model.Metadata"] = SignedIn,
+            ["Lookups.AllTypes"] = SignedIn,
+            ["Lookups.AddressTypes"] = SignedIn,
+            ["Lookups.PhoneNumberTypes"] = SignedIn,
+            ["Lookups.RateTypes"] = SignedIn,
+            ["Lookups.States"] = SignedIn,
             ["Agent.Info"] = SignedIn,
             ["Agent.Chat"] = SignedIn,
 
             // Editor or Reader: the company's staffing data.
-            ["Breeze.StaffingResources"] = TempHirePolicies.ReadStaffingData,
-            ["Breeze.StaffingResourceListItems"] = TempHirePolicies.ReadStaffingData,
-            ["Breeze.Addresses"] = TempHirePolicies.ReadStaffingData,
-            ["Breeze.PhoneNumbers"] = TempHirePolicies.ReadStaffingData,
-            ["Breeze.Rates"] = TempHirePolicies.ReadStaffingData,
-            ["Breeze.Skills"] = TempHirePolicies.ReadStaffingData,
-            ["Breeze.WorkExperienceItems"] = TempHirePolicies.ReadStaffingData,
+            ["ResourceMgt.StaffingResources"] = TempHirePolicies.ReadStaffingData,
+            ["ResourceMgt.StaffingResourceListItems"] = TempHirePolicies.ReadStaffingData,
+            ["ResourceMgt.Addresses"] = TempHirePolicies.ReadStaffingData,
+            ["ResourceMgt.PhoneNumbers"] = TempHirePolicies.ReadStaffingData,
+            ["ResourceMgt.Rates"] = TempHirePolicies.ReadStaffingData,
+            ["ResourceMgt.Skills"] = TempHirePolicies.ReadStaffingData,
+            ["ResourceMgt.WorkExperienceItems"] = TempHirePolicies.ReadStaffingData,
 
             // Editor: saving.
-            ["Breeze.SaveChanges"] = TempHirePolicies.EditStaffingData,
+            ["ResourceMgt.SaveChanges"] = TempHirePolicies.EditStaffingData,
         };
 
         [Fact]
@@ -139,7 +139,7 @@ namespace TempHire.Server.Tests
         /// <summary>Each action with the rule its attributes declare.</summary>
         private static IEnumerable<(string Name, string Rule)> Actions()
         {
-            var controllers = typeof(BreezeController).Assembly.GetTypes()
+            var controllers = typeof(ResourceMgtController).Assembly.GetTypes()
                 .Where(t => typeof(ControllerBase).IsAssignableFrom(t) && !t.IsAbstract);
 
             foreach (var controller in controllers)

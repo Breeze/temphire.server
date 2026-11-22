@@ -5,7 +5,7 @@ using TempHire.Server.Validation;
 namespace TempHire.Server.Controllers
 {
     /// <summary>
-    /// Serves the validation metadata, the counterpart of <see cref="BreezeController.Metadata"/>: the
+    /// Serves the validation metadata, the counterpart of <see cref="ModelController.Metadata"/>: the
     /// client loads both at sign-in.  The Breeze metadata brings the rules from the entities' data
     /// annotations; this brings the rest (<c>Validation/validation.metadata.json</c>), which the client
     /// installs into Breeze, so both are checked as the user edits and before a save, and again by the

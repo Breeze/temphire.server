@@ -481,7 +481,7 @@ client app ──(1) redirect──► /connect/authorize ──(2)──► /ac
      ▲                               │
      └──(3) /auth/callback?code=... ◄┘
      └──(4) POST /connect/token (code + PKCE verifier) ──► access token (30 min) + refresh token
-     └──(5) Authorization: Bearer <access token> ──► /api/breeze, /api/agent, /mcp (via Quinn)
+     └──(5) Authorization: Bearer <access token> ──► /api/model, /api/lookups, /api/resourcemgt, /api/agent, /mcp (via Quinn)
 ```
 
 - **Signing in.**  The client sends the browser to `connect/authorize`, which sends it on to the
@@ -562,9 +562,9 @@ Two Identity roles, `TempHireRoles`:
   | Who | Endpoints |
   |---|---|
   | Anyone | The sign-in page, `connect/authorize`, `connect/token`, `connect/logout`, `connect/register`, the metadata under `.well-known`, the client app's own files |
-  | Any signed-in user | `api/account/me`; the Breeze metadata and the shared lookups, which the client loads at sign-in; the validation metadata; Quinn's `api/agent/*`; connecting to `/mcp` |
-  | Editor or Reader (`ReadStaffingData`) | The Breeze queries for the company's data: `StaffingResources`, `StaffingResourceListItems` and the child collections; MCP tool calls |
-  | Editor (`EditStaffingData`) | `api/breeze/SaveChanges` |
+  | Any signed-in user | `api/account/me`; the Breeze metadata (`api/model`) and the shared lookups (`api/lookups`), which the client loads at sign-in; the validation metadata; Quinn's `api/agent/*`; connecting to `/mcp` |
+  | Editor or Reader (`ReadStaffingData`) | The Resource Management workspace's queries (`api/resourcemgt`): `StaffingResources`, `StaffingResourceListItems` and the child collections; MCP tool calls |
+  | Editor (`EditStaffingData`) | `api/resourcemgt/SaveChanges` |
 
   Anyone else gets `401` (not signed in) or `403 Forbidden` (signed in, wrong role).
 - **Deny by default.**  A fallback policy requires a signed-in user for any endpoint that doesn't
@@ -783,7 +783,9 @@ temphire.server/
 │   └── TempHireDbContext.cs   # the staffing data, tenant filters
 ├── TempHire.Server/
 │   ├── Controllers/
-│   │   ├── BreezeController.cs   # metadata, queries, SaveChanges, lookups, search
+│   │   ├── ModelController.cs    # the Breeze metadata
+│   │   ├── LookupsController.cs  # the lookups, loaded at sign-in (AllTypes)
+│   │   ├── ResourceMgtController.cs  # the Resource Management workspace: queries, search, SaveChanges
 │   │   ├── ValidationController.cs  # the validation metadata
 │   │   ├── AccountController.cs  # me: who the token belongs to
 │   │   ├── AuthorizationController.cs  # OAuth: authorize, token, logout

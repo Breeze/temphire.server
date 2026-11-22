@@ -13,7 +13,7 @@ namespace TempHire.Model
     /// <c>[DataContract]</c>, <c>[RequiresAuthentication]</c>, a virtual <c>Validate</c> and the
     /// concurrency column.  None of that needs a base class here: the entity aspect lives on the Breeze
     /// client, serialization is plain JSON.NET, <c>[RequiresAuthentication]</c> is <c>[Authorize]</c> on
-    /// the Breeze controller, the rules beyond the data annotations are validation metadata
+    /// the Breeze controllers, the rules beyond the data annotations are validation metadata
     /// (TempHire.Server/Validation/validation.metadata.json), and the concurrency column is here.
     /// </para>
     /// <para>

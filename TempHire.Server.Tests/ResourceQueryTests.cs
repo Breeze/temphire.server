@@ -7,7 +7,7 @@ using Xunit;
 namespace TempHire.Server.Tests
 {
     /// <summary>
-    /// <see cref="BreezeController.StaffingResources"/> returns the resources alone; the client says
+    /// <see cref="ResourceMgtController.StaffingResources"/> returns the resources alone; the client says
     /// what else to load with <c>expand</c>.  The first port included the addresses and phone numbers
     /// in every query, lists included, and the client's <c>withId</c> expanded them again.
     ///
@@ -30,7 +30,7 @@ namespace TempHire.Server.Tests
             var commands = new CommandCounter();
             using var context = _db.NewContext(commands);
 
-            var loaded = new BreezeController(context, validation: null!).StaffingResources().ToList();
+            var loaded = new ResourceMgtController(context, validation: null!).StaffingResources().ToList();
 
             var single = Assert.Single(loaded);
             Assert.Equal(resource.Id, single.Id);
@@ -47,7 +47,7 @@ namespace TempHire.Server.Tests
             using var context = _db.NewContext(commands);
 
             // What Breeze's [BreezeQueryFilter] does with the client's where and expand.
-            var loaded = new BreezeController(context, validation: null!)
+            var loaded = new ResourceMgtController(context, validation: null!)
                 .StaffingResources()
                 .Include(r => r.Addresses)
                 .Include(r => r.PhoneNumbers)
