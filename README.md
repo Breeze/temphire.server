@@ -613,7 +613,7 @@ whatever the sign-in.  What a provider adds:
 ## Validation
 
 > **Preview.**  Validation uses a preview of
-> [IdeaBlade Validation](https://github.com/Breeze/ideablade-validation) (`0.1.0-preview.9`),
+> [IdeaBlade Validation](https://github.com/Breeze/ideablade-validation) (`0.1.0-preview.10`),
 > which isn't published to NuGet or npm yet: the build is in `packages/`, where `nuget.config`
 > finds it (`packages/README.md` explains how to update it).  The framework's API may still change
 > before its first release, and so may its name.
