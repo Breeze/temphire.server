@@ -3,7 +3,7 @@
 A build of [ideablade-validation](https://github.com/Breeze/ideablade-validation) that the server
 uses until the library is published to NuGet:
 
-- `IdeaBlade.Validation.0.1.0-preview.5.nupkg` - the `IdeaBlade.Validation` package, found
+- `IdeaBlade.Validation.0.1.0-preview.7.nupkg` - the `IdeaBlade.Validation` package, found
   through the `local` source in `nuget.config`.
 
 The clients take the matching npm package, `@ideablade/validation`, from their own `packages`
@@ -15,7 +15,7 @@ one.
 
 ```
 cd ideablade-validation/dotnet/src/IdeaBlade.Validation
-dotnet pack -c Release -p:Version=0.1.0-preview.6 -o <this folder>
+dotnet pack -c Release -p:Version=0.1.0-preview.8 -o <this folder>
 ```
 
 Then delete the old file here and change the version in `TempHire.Server/TempHire.Server.csproj`.
