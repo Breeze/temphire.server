@@ -85,17 +85,24 @@ namespace TempHire.Server.Controllers
         }
 
         /// <summary>
-        /// Aggregate root query.  Mirrors <c>StaffingResourceRepository.GetKeyQuery</c>, which eagerly
-        /// pulled in Addresses and PhoneNumbers so that the summary line could be rendered without a
-        /// second trip.  Breeze lets the client add its own <c>.expand(...)</c> on top of this.
+        /// Aggregate root query: the resources alone, unless the client asks for related entities with
+        /// <c>.expand(...)</c>.  The client decides what a load brings: its
+        /// <c>StaffingResourceRepository.withId</c> expands every child collection, as the original's
+        /// <c>StaffingResourceRepository.GetKeyQuery</c> included the addresses and phone numbers.
+        /// That was the repository's key query only; a list or a grid of resources is a projection
+        /// (<see cref="StaffingResourceListItems"/>), not resources with their children.
+        ///
+        /// <para>
+        /// A split query, for the expanded load: one SQL query for the resources and one per
+        /// collection.  As a single query, the JOINs multiply the rows (addresses x phone numbers x
+        /// rates x skills x work experience per resource), and EF Core warns about it.
+        /// </para>
         /// </summary>
         [HttpGet]
         [Authorize(Policy = TempHirePolicies.ReadStaffingData)]
         public IQueryable<StaffingResource> StaffingResources()
         {
-            return Context.StaffingResources
-                .Include(r => r.Addresses)
-                .Include(r => r.PhoneNumbers);
+            return Context.StaffingResources.AsSplitQuery();
         }
 
         [HttpGet]
