@@ -1,0 +1,18 @@
+root = true
+
+# The C# style of this repository: current syntax, so new code and Visual Studio's suggestions
+# follow it.  The suggestions show in the editor; they don't fail the build.
+[*.cs]
+csharp_style_namespace_declarations = file_scoped:suggestion
+csharp_style_prefer_primary_constructors = true:suggestion
+dotnet_style_prefer_collection_expression = when_types_loosely_match:suggestion
+csharp_style_implicit_object_creation_when_type_is_apparent = true:suggestion
+dotnet_style_prefer_is_null_check_over_reference_equality_method = true:suggestion
+
+# EF Core migrations are generated: leave them as the tools write them.
+[**/Migrations/*.cs]
+generated_code = true
+
+# Hand-written code that generates sample people at run time; its name only looks generated.
+[**/SampleDataProvider.Generated.cs]
+generated_code = false
