@@ -111,6 +111,32 @@ public sealed class SaveRulesTests : IDisposable
     }
 
     [Fact]
+    public async Task AnImplausibleDateOfBirthIsRefused()
+    {
+        // Not in the future, and not further back than the longest documented life.
+        foreach (var dateOfBirth in new[] { DateTime.Today.AddDays(1), DateTime.Today.AddYears(-123).AddDays(-1) })
+        {
+            var resource = SaveFixture.Resource();
+            resource.DateOfBirth = dateOfBirth;
+
+            var errors = await Assert.ThrowsAsync<EntityErrorsException>(() => _db.SaveAsync(new SaveBundle()
+                .Add(resource).Add(SaveFixture.Address(resource.Id)).Add(SaveFixture.Phone(resource.Id))
+                .Build()));
+
+            var error = Assert.Single(errors.EntityErrors);
+            Assert.Equal(("PLAUSIBLE_DATE_OF_BIRTH", "DateOfBirth"), (error.ErrorName, error.PropertyName));
+            Assert.Null(_db.Load<StaffingResource>(resource.Id));
+        }
+
+        var plausible = SaveFixture.Resource();
+        plausible.DateOfBirth = DateTime.Today.AddYears(-123);
+        await _db.SaveAsync(new SaveBundle()
+            .Add(plausible).Add(SaveFixture.Address(plausible.Id)).Add(SaveFixture.Phone(plausible.Id))
+            .Build());
+        Assert.NotNull(_db.Load<StaffingResource>(plausible.Id));
+    }
+
+    [Fact]
     public async Task ARuleBrokenByTwoUsersTogetherIsCaught()
     {
         // A resource with two addresses, which two users open at the same time.

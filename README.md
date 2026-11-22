@@ -625,8 +625,14 @@ The validation rules are written once, here, in two places:
 - **the validation metadata**, `TempHire.Server/Validation/validation.metadata.json`, for the rules
   annotations cannot express: an address is a U.S. address, with a state and a ZIP code; a phone
   number has a 3-digit area code and a 7-digit number (a dash or a dot may follow the first 3
-  digits); a rate is a valid amount and not negative; dates are valid dates; and a staffing resource
-  has at least one address and one phone number, and it is at least 18 years old when hired.
+  digits); a rate is a valid amount and not negative; dates are valid dates; a date of birth is
+  neither in the future nor more than 123 years ago (the longest documented life is 122); and a
+  staffing resource has at least one address and one phone number, and it is at least 18 years old
+  when hired.
+
+The sample data a new database is seeded with passes all of them: `SampleDataTests` validates
+every seeded row with the server's own rules, so a new rule that the sample data would break fails
+a test rather than leaving a sample record nobody can save.
 
 Both reach the framework the same way.  The metadata's global `breeze` validator brings in the
 annotations: on the client it runs Breeze's validators, which Breeze builds from them; here it runs
