@@ -130,8 +130,17 @@ this repository, push it, and then commit the submodule's new commit in the clie
 dotnet test
 ```
 
-`TempHire.Server.Tests` covers saves, concurrency, and the rules checked on save, against an
-in-memory SQLite database.
+`TempHire.Server.Tests` has over 60 tests, most against an in-memory SQLite database, so they run
+real SQL and need no SQL Server:
+
+| Tests | What they cover |
+|---|---|
+| `SaveRulesTests` | Saves through the real save pipeline: lookups are read-only, another company's rows can't be changed, the validation rules hold against the database as it will be after the save (deleting the last address alone, two users together), and errors name the property as the client knows it |
+| `ConcurrencyTests` | Optimistic concurrency: which entities carry a version, how a save increments it, and that changing or deleting a row someone else changed is a conflict that writes nothing |
+| `SampleDataTests` | All the sample data passes every rule the server checks on a save, with a positive control |
+| `ResourceQueryTests` | The staffing resource queries return what the client asks for, and load related collections with one SQL query each (the client's load and Quinn's) |
+| `AuthorizationRulesTests` | Every controller action declares who may call it, and the save and Quinn's tools check the same roles as the policies |
+| `QuinnUsageTests` | Quinn's budgets: days, weeks and months in UTC, which rule applies, what tokens cost (cache reads and writes included), and which budget stops a user and until when |
 
 ---
 
@@ -810,7 +819,7 @@ temphire.server/
 │   ├── Auth/                  # OAuth settings and clients, token claims, audience check, current tenant
 │   ├── Views/                 # the sign-in and consent pages
 │   └── Program.cs
-└── TempHire.Server.Tests/     # saves, concurrency, save-time rules, who may call what (dotnet test)
+└── TempHire.Server.Tests/     # saves, rules, sample data, queries, who may call what, budgets
 ```
 
 The `←` marks name what each part replaces in the original WPF version, in the
