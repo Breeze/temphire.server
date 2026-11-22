@@ -5,7 +5,8 @@
     "The global breeze validator brings the entities' data annotations ([Required], [MaxLength], ...) into the framework.  On the client it runs Breeze's validators, which Breeze builds from those annotations; on the server it runs the annotations themselves (AddDataAnnotations(\"breeze\") in Program.cs).  The other rules are the ones annotations cannot express.",
     "Property names are the client's (camelCase), because the expressions run in the browser too; the server matches them to its properties case-insensitively.  There are no display names: on the server a message names the property as the payload does, and the client takes its display names from Breeze.",
     "Address.stateId: the foreign key is a non-nullable Guid, so an address without a state has the empty Guid, which [Required] accepts.",
-    "Addresses are U.S. addresses: a state, and a U.S. ZIP code.  Phone numbers are U.S. numbers: a 3-digit area code, and a 7-digit number with an optional dash or dot after the first 3 digits."
+    "Addresses are U.S. addresses: a state, and a U.S. ZIP code.  Phone numbers are U.S. numbers: a 3-digit area code, and a 7-digit number with an optional dash or dot after the first 3 digits.",
+    "A date of birth is a plausible one: not in the future, and not further back than the longest documented human life, 122 years and 164 days, so no more than 123 years ago."
   ],
 
   "global": { "validators": ["breeze"] },
@@ -40,7 +41,18 @@
     ],
     "properties": {
       "dateOfBirth": {
-        "validators": [{ "name": "date", "context": { "messageTemplate": "'%displayName%' must be a valid date" } }]
+        "validators": [
+          { "name": "date", "context": { "messageTemplate": "'%displayName%' must be a valid date" } },
+          {
+            "name": "range",
+            "id": "PLAUSIBLE_DATE_OF_BIRTH",
+            "context": {
+              "minValue": "today-123y",
+              "maxValue": "today",
+              "messageTemplate": "'%displayName%' can't be in the future or more than 123 years ago"
+            }
+          }
+        ]
       },
       "hireDate": {
         "validators": [{ "name": "date", "context": { "messageTemplate": "'%displayName%' must be a valid date" } }]

@@ -126,15 +126,22 @@ public partial class SampleDataProvider
     /// seeded with them.  The sample data is generated into a context that never connects to a
     /// database, so a migration can give an existing database the same dates.
     /// </summary>
-    public static IReadOnlyList<(Guid Id, DateTime DateOfBirth, DateTime HireDate)> SampleDates()
+    public static IReadOnlyList<(Guid Id, DateTime DateOfBirth, DateTime HireDate)> SampleDates() =>
+        [.. SampleEntities().OfType<StaffingResource>()
+            .Select(r => (r.Id, r.DateOfBirth!.Value, r.HireDate!.Value))];
+
+    /// <summary>
+    /// Every entity a new database is seeded with, both tenants' (lookups, staffing resources and
+    /// their children), generated into a context that never connects to a database.  A test
+    /// validates them all with the server's rules, so the sample data never breaks a rule.
+    /// </summary>
+    public static IReadOnlyList<object> SampleEntities()
     {
         using var context = new TempHireDbContext(
             new DbContextOptionsBuilder<TempHireDbContext>().UseSqlServer("Server=(none)").Options);
         new SampleDataProvider().Generate(context, () => { });
 
-        return context.ChangeTracker.Entries<StaffingResource>()
-            .Select(e => (e.Entity.Id, e.Entity.DateOfBirth!.Value, e.Entity.HireDate!.Value))
-            .ToList();
+        return [.. context.ChangeTracker.Entries().Select(e => e.Entity)];
     }
 
     /// <summary>
