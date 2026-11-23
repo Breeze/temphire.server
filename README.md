@@ -35,6 +35,7 @@ from the original Silverlight and WPF versions, and the client side.
   - [Prompt caching](#prompt-caching)
   - [Budgets: usage and quotas](#budgets-usage-and-quotas)
 - [Multi-tenancy](#multi-tenancy)
+  - [Query limits](#query-limits)
 - [Users and sign-in](#users-and-sign-in)
   - [Using TempHire's MCP server from Claude Code](#using-temphires-mcp-server-from-claude-code)
   - [Roles](#roles)
@@ -171,6 +172,7 @@ real SQL and need no SQL Server:
 | `ResourceQueryTests` | The staffing resource queries return what the client asks for, and load related collections with one SQL query each (the client's load and Quinn's) |
 | `AuthorizationRulesTests` | Every controller action declares who may call it, and the save and Quinn's tools check the same roles as the policies |
 | `QuinnUsageTests` | Quinn's budgets: days, weeks and months in UTC, which rule applies, what tokens cost (cache reads and writes included), and which budget stops a user and until when |
+| `BreezeQueryLimitsTests` | The query limits over HTTP, through the real filter pipeline: the 1000-row cap, how deep each endpoint may expand or select, and that no `[BreezeQueryFilter]` attribute leaves a limit out |
 | `SwaggerDocumentTests` | The Swagger description, generated as the server generates it: only the API, every endpoint with a summary and described responses, 401 and the role policies' 403, and Json.NET's property names |
 
 ---
@@ -502,6 +504,38 @@ Each user belongs to a company, a **tenant**, and sees and changes only that com
 - **The client never sees the tenant.**  `TenantId` is a server-only column: it is left out of the
   JSON and of the Breeze metadata (`TempHirePersistenceManager.BuildJsonMetadata`), so it is not in
   the clients' generated entity classes either.
+
+### Query limits
+
+A Breeze client composes its own queries, so the server bounds what one may cost, following
+[Breeze's security guide](https://breeze.github.io/breeze-server-v3/guide/security).  The
+tenant filter above decides *who sees what*; these limits decide *how much one query may ask
+for*.
+
+| Endpoints | Rows (`MaxTake`) | `expand` / `select` depth (`MaxDepth`) |
+|---|---|---|
+| Every Breeze query, unless it says otherwise (registered globally) | 1000 | 2 |
+| `api/resourcemgt/StaffingResources`, the aggregate root | 1000 | 2: a resource with its addresses and their states |
+| The other `api/resourcemgt` queries (addresses, phone numbers, rates, skills, work experience, the search) | 1000 | 1: an address with its type, state or resource, nothing beyond |
+| `api/lookups` | 1000 | 0: no expand at all |
+
+- **Registered once**, in `BreezeQueryLimits.AddTo` (called from `Program.cs`), so a controller
+  added later is bounded whether or not its author thought about it.  An endpoint that doesn't
+  return an `IQueryable` is unaffected.
+- **A tighter limit goes on the controller or the action**, as its own
+  `[BreezeQueryFilter(MaxTake = BreezeQueryLimits.MaxTake, MaxDepth = 1)]`.  The filter nearest the
+  action answers the query and the global one then has nothing left to do, so such an attribute
+  must state **both** limits: one that leaves `MaxTake` out lifts the row cap (Breeze's default is
+  unlimited).  `BreezeQueryLimitsTests` fails for an attribute that leaves a limit out or loosens
+  it.
+- **Beyond the limits** a query answers `400 Bad Request`, naming the path (`MaxDepth exceeded:
+  Addresses.StaffingResource.PhoneNumbers`).  `MaxTake` doesn't refuse; it adds `Take(1000)`, and
+  it doesn't cap the collections an `expand` brings.
+- **Expand works from the first request.**  Breeze plugs EF's `Include` into its query filter
+  only when the first persistence manager is created, by the Metadata endpoint or a save; until
+  then an `expand` was silently ignored (200, without the related entities).  The client apps load
+  the metadata first and never noticed; Swagger UI did.  `Program.cs` now calls
+  `TempHirePersistenceManager.InstallQueryHooks()` at startup.
 
 ---
 
@@ -875,8 +909,9 @@ file carries a doc comment naming the file it came from.
   [Budgets: usage and quotas](#budgets-usage-and-quotas).  Budgets start over at midnight UTC, not in
   the company's time zone, and a budget can be overrun by the questions under way when it runs out.
 - **Search has no paging.** `StaffingResourceListItems` returns every match, exactly as
-  `StaffingResourceSearchService.Simple` did. `[BreezeQueryFilter(MaxTake = ...)]` is the place to
-  add a cap.
+  `StaffingResourceSearchService.Simple` did, up to the 1000-row cap
+  ([Query limits](#query-limits)); a search with more matches shows the first 1000 by last name,
+  and nothing tells the user there were more.
 - **The `.sdf` sample databases are not migrated.** The seed data is re-created from the ported
   `SampleDataProvider`, so the original nine people keep their ids (in Harbor Staffing), but any
   data you added to the old SQL Compact files does not come across.

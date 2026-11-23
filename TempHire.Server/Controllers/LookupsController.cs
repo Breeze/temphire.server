@@ -22,9 +22,14 @@ namespace TempHire.Server.Controllers;
 /// <para>
 /// A signed-in user, no particular role: the client loads them whatever the user's role.
 /// </para>
+/// <para>
+/// No <c>expand</c> or navigation <c>select</c> at all (<c>MaxDepth = 0</c>): a lookup is a flat
+/// table the client caches whole, with nothing to reach through it.  The row cap is the app's
+/// (<see cref="BreezeQueryLimits"/>), restated because this attribute replaces the global one.
+/// </para>
 /// </remarks>
 [Route("api/lookups/[action]")]
-[BreezeQueryFilter]
+[BreezeQueryFilter(MaxTake = BreezeQueryLimits.MaxTake, MaxDepth = 0)]
 [Authorize]
 public class LookupsController(TempHireDbContext dbContext) : ControllerBase
 {

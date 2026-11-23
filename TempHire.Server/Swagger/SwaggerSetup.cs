@@ -6,6 +6,7 @@ using Microsoft.OpenApi;
 using Newtonsoft.Json.Linq;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using TempHire.Server.Auth;
+using TempHire.Server.Controllers;
 
 namespace TempHire.Server.Swagger;
 
@@ -131,18 +132,30 @@ public static class SwaggerSetup
     {
         public void Apply(OpenApiOperation operation, OperationFilterContext context)
         {
+            // Every action that returns an IQueryable is a Breeze query: the filter is registered
+            // globally (BreezeQueryLimits), and a controller or action may carry a tighter one.
             if (context.ApiDescription.ActionDescriptor is not ControllerActionDescriptor action
-                || action.ControllerTypeInfo.GetCustomAttribute<BreezeQueryFilterAttribute>() is null
                 || !IsQueryable(action.MethodInfo.ReturnType))
             {
                 return;
             }
 
-            const string note = "A Breeze query: a Breeze client can add a query (JSON, such as "
-                                + "`{\"where\":{\"LastName\":\"Smith\"},\"take\":5}`, URL-encoded) as the whole query string. "
-                                + "Swagger UI can't send one, so here it returns every row you may see.";
+            // The limits that apply: the filter nearest the action answers the query.
+            var filter = action.MethodInfo.GetCustomAttribute<BreezeQueryFilterAttribute>()
+                         ?? action.ControllerTypeInfo.GetCustomAttribute<BreezeQueryFilterAttribute>();
+            var maxTake = filter?.MaxTake ?? BreezeQueryLimits.MaxTake;
+            var maxDepth = filter?.MaxDepth ?? BreezeQueryLimits.MaxDepth;
+
+            var note = "A Breeze query: a Breeze client can add a query (JSON, such as "
+                       + "`{\"where\":{\"LastName\":\"Smith\"},\"take\":5}`, URL-encoded) as the whole query string. "
+                       + $"Swagger UI can't send one, so here it returns every row you may see, up to {Limit(maxTake, "rows")}. "
+                       + (maxDepth == 0
+                           ? "No `expand`, and no `select` of a navigation property."
+                           : $"`expand` and `select` may go {Limit(maxDepth, "navigation level(s)")} deep; deeper is 400 Bad Request.");
             operation.Description = string.IsNullOrEmpty(operation.Description) ? note : operation.Description + "\n\n" + note;
         }
+
+        private static string Limit(int value, string unit) => value < 0 ? $"any number of {unit}" : $"{value} {unit}";
 
         private static bool IsQueryable(Type type) =>
             type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IQueryable<>);

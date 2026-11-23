@@ -66,7 +66,10 @@ builder.Services.AddControllersWithViews()
     .AddMvcOptions(o => o.Filters.Add(new GlobalExceptionFilter
     {
         StatusCodeForException = e => e.GetBaseException() is UnauthorizedAccessException ? HttpStatusCode.Forbidden : null
-    }));
+    }))
+    // What a client-composed query may cost, for every Breeze query: at most 1000 rows, and expands
+    // two levels deep.  Controllers and actions that need less say so themselves; see BreezeQueryLimits.
+    .AddMvcOptions(o => BreezeQueryLimits.AddTo(o));
 
 // ---------------------------------------------------------------------------------------------
 // Data stores
@@ -363,6 +366,10 @@ var app = builder.Build();
 // Breeze 8 no longer puts the server stack trace in error responses by default; keep it in
 // development, where it helps, and leave it out everywhere else.
 Breeze.Persistence.BreezeConfig.Instance.IncludeStackTraceInErrors = app.Environment.IsDevelopment();
+
+// EF Core's expand (Include) for Breeze queries, from the first request on: without it, a query
+// that comes before any metadata request or save has its expand silently ignored.
+TempHirePersistenceManager.InstallQueryHooks();
 
 // ---------------------------------------------------------------------------------------------
 // Metadata export:  dotnet run -- --export-metadata <file>

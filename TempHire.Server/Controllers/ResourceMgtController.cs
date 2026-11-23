@@ -39,9 +39,15 @@ namespace TempHire.Server.Controllers;
 /// (<see cref="TempHirePolicies.EditStaffingData"/>).  <see cref="TempHirePersistenceManager"/>
 /// checks the Editor role again for every save.
 /// </para>
+/// <para>
+/// Query limits (<see cref="BreezeQueryLimits"/>): at most 1000 rows everywhere.  The aggregate root,
+/// <see cref="StaffingResources"/>, may expand two levels (the app's limit), so a resource can come
+/// with its addresses and their states.  Every other query may expand one level: an address its
+/// address type, state or staffing resource, but nothing beyond them.  Those actions say so with
+/// their own <c>[BreezeQueryFilter]</c>, which replaces the global one.
+/// </para>
 /// </remarks>
 [Route("api/resourcemgt/[action]")]
-[BreezeQueryFilter]
 [Authorize]
 public class ResourceMgtController(TempHireDbContext dbContext, ValidationService validation)
     : ControllerBase
@@ -110,30 +116,35 @@ public class ResourceMgtController(TempHireDbContext dbContext, ValidationServic
     /// <response code="200">The addresses the query selects.</response>
     [HttpGet]
     [Authorize(Policy = TempHirePolicies.ReadStaffingData)]
+    [BreezeQueryFilter(MaxTake = BreezeQueryLimits.MaxTake, MaxDepth = 1)]
     public IQueryable<Address> Addresses() => Context.Addresses;
 
     /// <summary>The staffing resources' phone numbers.</summary>
     /// <response code="200">The phone numbers the query selects.</response>
     [HttpGet]
     [Authorize(Policy = TempHirePolicies.ReadStaffingData)]
+    [BreezeQueryFilter(MaxTake = BreezeQueryLimits.MaxTake, MaxDepth = 1)]
     public IQueryable<PhoneNumber> PhoneNumbers() => Context.PhoneNumbers;
 
     /// <summary>The staffing resources' rates.</summary>
     /// <response code="200">The rates the query selects.</response>
     [HttpGet]
     [Authorize(Policy = TempHirePolicies.ReadStaffingData)]
+    [BreezeQueryFilter(MaxTake = BreezeQueryLimits.MaxTake, MaxDepth = 1)]
     public IQueryable<Rate> Rates() => Context.Rates;
 
     /// <summary>The staffing resources' skills.</summary>
     /// <response code="200">The skills the query selects.</response>
     [HttpGet]
     [Authorize(Policy = TempHirePolicies.ReadStaffingData)]
+    [BreezeQueryFilter(MaxTake = BreezeQueryLimits.MaxTake, MaxDepth = 1)]
     public IQueryable<Skill> Skills() => Context.Skills;
 
     /// <summary>The staffing resources' work experience.</summary>
     /// <response code="200">The work experience items the query selects.</response>
     [HttpGet]
     [Authorize(Policy = TempHirePolicies.ReadStaffingData)]
+    [BreezeQueryFilter(MaxTake = BreezeQueryLimits.MaxTake, MaxDepth = 1)]
     public IQueryable<WorkExperienceItem> WorkExperienceItems() => Context.WorkExperienceItems;
 
     /// <summary>
@@ -159,6 +170,7 @@ public class ResourceMgtController(TempHireDbContext dbContext, ValidationServic
     /// <response code="200">The matching resources, ordered by last name.</response>
     [HttpGet]
     [Authorize(Policy = TempHirePolicies.ReadStaffingData)]
+    [BreezeQueryFilter(MaxTake = BreezeQueryLimits.MaxTake, MaxDepth = 1)]
     public IQueryable<StaffingResourceListItem> StaffingResourceListItems(string searchText = null)
     {
         var query = Context.StaffingResources.AsQueryable();
