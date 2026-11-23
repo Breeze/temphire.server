@@ -183,6 +183,50 @@ public sealed class BreezeQueryLimitsTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.BadRequest, refused.Status);
     }
 
+    // ---- Ordering: by key unless the client orders ------------------------------------------------
+
+    /// <summary>
+    /// Every query action orders by key, so the cap's <c>Take(1000)</c> takes the same rows every time
+    /// (and EF Core has no "Take without OrderBy" to warn about).
+    /// </summary>
+    [Fact]
+    public async Task Without_an_orderBy_rows_come_in_key_order()
+    {
+        StoreResources(20);
+        using var db = _db.NewContext();
+        var byKey = db.StaffingResources.OrderBy(r => r.Id).Select(r => r.Id).ToList();
+
+        var (body, _) = await QueryAsync("resourcemgt/StaffingResources", new { take = 20 });
+
+        Assert.Equal(byKey, Rows(body).Select(r => (Guid)r["Id"]!).ToList());
+    }
+
+    /// <summary>
+    /// Breeze applies the client's first <c>orderBy</c> term with <c>OrderBy</c>, which replaces the
+    /// action's ordering by key: the client's ordering wins.
+    /// </summary>
+    [Fact]
+    public async Task A_client_orderBy_replaces_the_order_by_key()
+    {
+        var names = new[] { "Baker", "Young", "Adams", "Moore", "Clark" };
+        _db.Store([.. names.Select(name => SaveFixture.Resource() is var r ? Named(r, name) : null)]);
+
+        var (descending, _) = await QueryAsync("resourcemgt/StaffingResources", new { orderBy = new[] { "LastName desc" } });
+        Assert.Equal(names.OrderByDescending(n => n), Rows(descending).Select(r => (string)r["LastName"]));
+
+        // The search orders by last name, ascending; a client's orderBy replaces that too.
+        var (search, _) = await QueryAsync("resourcemgt/StaffingResourceListItems");
+        Assert.Equal(names.OrderBy(n => n), Rows(search).Select(r => (string)r["LastName"]));
+        var (searchDescending, _) = await QueryAsync("resourcemgt/StaffingResourceListItems", new { orderBy = new[] { "LastName desc" } });
+        Assert.Equal(names.OrderByDescending(n => n), Rows(searchDescending).Select(r => (string)r["LastName"]));
+
+        static StaffingResource Named(StaffingResource resource, string lastName)
+        {
+            resource.LastName = lastName;
+            return resource;
+        }
+    }
+
     // ---- No attribute loosens them ----------------------------------------------------------------
 
     /// <summary>

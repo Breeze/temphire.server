@@ -35,6 +35,12 @@ public static class BreezeQueryLimits
     /// doesn't say.  It doesn't cap the collections an <c>expand</c> brings, nor results that aren't
     /// EF queries.
     /// </summary>
+    /// <remarks>
+    /// So that it takes the same rows every time, every query action returns its set ordered by key
+    /// (the search: by last name, then key); without an order EF Core also warns about a
+    /// <c>Take</c> on every query.  A client's <c>orderBy</c> replaces that order: Breeze applies its
+    /// first term with <c>OrderBy</c>.  A new query action should order its set the same way.
+    /// </remarks>
     public const int MaxTake = 1000;
 
     /// <summary>

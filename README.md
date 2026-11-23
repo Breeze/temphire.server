@@ -172,7 +172,7 @@ real SQL and need no SQL Server:
 | `ResourceQueryTests` | The staffing resource queries return what the client asks for, and load related collections with one SQL query each (the client's load and Quinn's) |
 | `AuthorizationRulesTests` | Every controller action declares who may call it, and the save and Quinn's tools check the same roles as the policies |
 | `QuinnUsageTests` | Quinn's budgets: days, weeks and months in UTC, which rule applies, what tokens cost (cache reads and writes included), and which budget stops a user and until when |
-| `BreezeQueryLimitsTests` | The query limits over HTTP, through the real filter pipeline: the 1000-row cap, how deep each endpoint may expand or select, and that no `[BreezeQueryFilter]` attribute leaves a limit out |
+| `BreezeQueryLimitsTests` | The query limits over HTTP, through the real filter pipeline: the 1000-row cap, how deep each endpoint may expand or select, that no `[BreezeQueryFilter]` attribute leaves a limit out, and rows in key order unless the client's `orderBy` replaces it |
 | `SwaggerDocumentTests` | The Swagger description, generated as the server generates it: only the API, every endpoint with a summary and described responses, 401 and the role policies' 403, and Json.NET's property names |
 
 ---
@@ -531,6 +531,10 @@ for*.
 - **Beyond the limits** a query answers `400 Bad Request`, naming the path (`MaxDepth exceeded:
   Addresses.StaffingResource.PhoneNumbers`).  `MaxTake` doesn't refuse; it adds `Take(1000)`, and
   it doesn't cap the collections an `expand` brings.
+- **Ordered by key.**  Every query action returns its set ordered by key (the search: by last name,
+  then key), so the cap takes the same rows every time, and EF Core doesn't warn about a `Take`
+  without an `OrderBy` on every query.  A client's `orderBy` replaces that order: Breeze applies
+  its first term with `OrderBy`, not `ThenBy`.  A new query action should order its set too.
 - **Expand works from the first request.**  Breeze plugs EF's `Include` into its query filter
   only when the first persistence manager is created, by the Metadata endpoint or a save; until
   then an `expand` was silently ignored (200, without the related entities).  The client apps load

@@ -57,22 +57,22 @@ public class LookupsController(TempHireDbContext dbContext) : ControllerBase
     /// <summary>The address types (home, mailing, work).</summary>
     /// <response code="200">The address types the query selects.</response>
     [HttpGet]
-    public IQueryable<AddressType> AddressTypes() => dbContext.AddressTypes;
+    public IQueryable<AddressType> AddressTypes() => dbContext.AddressTypes.OrderBy(t => t.Id);
 
     /// <summary>The phone number types (home, mobile, work).</summary>
     /// <response code="200">The phone number types the query selects.</response>
     [HttpGet]
-    public IQueryable<PhoneNumberType> PhoneNumberTypes() => dbContext.PhoneNumberTypes;
+    public IQueryable<PhoneNumberType> PhoneNumberTypes() => dbContext.PhoneNumberTypes.OrderBy(t => t.Id);
 
     /// <summary>The rate types (hourly, daily, weekly, monthly).</summary>
     /// <response code="200">The rate types the query selects.</response>
     [HttpGet]
-    public IQueryable<RateType> RateTypes() => dbContext.RateTypes;
+    public IQueryable<RateType> RateTypes() => dbContext.RateTypes.OrderBy(t => t.Id);
 
     /// <summary>The US states and the District of Columbia.</summary>
     /// <response code="200">The states the query selects.</response>
     [HttpGet]
-    public IQueryable<State> States() => dbContext.States;
+    public IQueryable<State> States() => dbContext.States.OrderBy(s => s.Id);
 }
 
 /// <summary>
