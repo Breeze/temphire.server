@@ -11,6 +11,9 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 namespace TempHire.Server.Controllers;
 
 /// <summary>
+/// Quinn's token usage and quotas.
+/// </summary>
+/// <remarks>
 /// The current user's Quinn usage: per model, what they and their company have spent today,
 /// this week and this month, against the quotas (<c>Agent:Quotas</c>).  For the client's usage
 /// page.
@@ -19,7 +22,7 @@ namespace TempHire.Server.Controllers;
 /// Every signed-in user may see their own usage and their company's total; nobody sees another
 /// user's.  The user and company come from the access token, never from the request.
 /// </para>
-/// </summary>
+/// </remarks>
 [ApiController]
 [Authorize]
 [Route("api/usage")]
@@ -31,6 +34,16 @@ public class UsageController(
     private readonly QuinnUsageStore _usage = usage;
     private readonly ChatClientFactory _chatClients = chatClients;
 
+    /// <summary>
+    /// What the signed-in user and their company have spent on Quinn, per model, today, this week and
+    /// this month, against the quotas.
+    /// </summary>
+    /// <remarks>
+    /// The current model comes first.  Nobody sees another user's usage, only their own and their
+    /// company's total.
+    /// </remarks>
+    /// <param name="cancellationToken">Cancelled when the client disconnects.</param>
+    /// <response code="200">The usage per model.</response>
     [HttpGet]
     public async Task<ActionResult<UsageDto>> Get(CancellationToken cancellationToken)
     {

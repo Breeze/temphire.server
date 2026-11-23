@@ -21,6 +21,9 @@ public static class QuinnPersona
         "*quinque*, five, so the name is a nod to that recipe: today's TempHire mixes Angular or React, Breeze, " +
         ".NET, a database - and Quinn, the fifth ingredient.";
 
+    /// <param name="companyName">The user's company, whose data Quinn answers about.</param>
+    /// <param name="userName">Who Quinn is helping.</param>
+    /// <param name="today">Today's date, which the prompt tells the model.</param>
     /// <param name="canReadStaffingData">
     /// Whether the user has a role that may see the staffing data (Editor or Reader).  The tools
     /// refuse such a user anyway; telling the model as well keeps it from answering a data

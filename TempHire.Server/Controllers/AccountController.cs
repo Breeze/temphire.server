@@ -8,6 +8,9 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 namespace TempHire.Server.Controllers;
 
 /// <summary>
+/// Who is signed in.
+/// </summary>
+/// <remarks>
 /// What is left of the account API: who the token belongs to.
 ///
 /// <para>
@@ -18,15 +21,17 @@ namespace TempHire.Server.Controllers;
 /// <c>connect/logout</c>.  The tenant is still decided from the email domain and signed into the
 /// token, now by <see cref="TokenClaims"/>.
 /// </para>
-/// </summary>
+/// </remarks>
 [ApiController]
 [Route("api/account/[action]")]
 public class AccountController : ControllerBase
 {
-    /// <summary>
-    /// Who the token belongs to.  The client shows the name, company and roles, and checks after
-    /// signing in or reloading that its token is good.
-    /// </summary>
+    /// <summary>Who the access token belongs to: the user's name, company and roles.</summary>
+    /// <remarks>
+    /// The client shows the name, company and roles, and checks after signing in or reloading that
+    /// its token is good.  camelCase names, unlike the Breeze endpoints.
+    /// </remarks>
+    /// <response code="200">The signed-in user.</response>
     [HttpGet]
     [Authorize]
     public ActionResult<UserInfo> Me() => new UserInfo
@@ -60,7 +65,10 @@ public class AccountController : ControllerBase
 [JsonObject(NamingStrategyType = typeof(CamelCaseNamingStrategy))]
 public class UserInfo
 {
+    /// <summary>The user's name: their email address.</summary>
     public string Username { get; set; }
+
+    /// <summary>The user's company.</summary>
     public string TenantName { get; set; }
 
     /// <summary>

@@ -24,6 +24,7 @@ from the original Silverlight and WPF versions, and the client side.
 - [Prerequisites](#prerequisites)
 - [Running it](#running-it)
   - [Sample users](#sample-users)
+  - [Swagger](#swagger)
   - [In a client repository](#in-a-client-repository)
   - [Tests](#tests)
 - [Quinn, the assistant](#quinn-the-assistant)
@@ -34,6 +35,7 @@ from the original Silverlight and WPF versions, and the client side.
   - [Prompt caching](#prompt-caching)
   - [Budgets: usage and quotas](#budgets-usage-and-quotas)
 - [Multi-tenancy](#multi-tenancy)
+  - [Query limits](#query-limits)
 - [Users and sign-in](#users-and-sign-in)
   - [Using TempHire's MCP server from Claude Code](#using-temphires-mcp-server-from-claude-code)
   - [Roles](#roles)
@@ -97,6 +99,35 @@ An **Editor** can add, change and delete staffing resources; a **Reader** can on
 (see [Roles](#roles)).  When the server runs in the Development environment, its sign-in page lists
 the sample users, and a click on one signs in as that user; anywhere else it doesn't offer them.
 
+### Swagger
+
+In the Development environment the server describes its API with
+[Swashbuckle](https://github.com/domaindrivendev/Swashbuckle.AspNetCore): Swagger UI at
+**`http://localhost:5000/swagger`**, and the OpenAPI document at `/swagger/v1/swagger.json`.  The
+server's own root, `http://localhost:5000/`, goes straight there, unless a client build has been
+copied into `wwwroot`, which then keeps its place at `/`.  In a client repository, use the port that
+client's server runs on (5100 for React).
+
+- **Signing in.**  Every endpoint needs an access token.  Click **Authorize**, then **Authorize** in
+  the dialog (the client id and the `staffing` scope are filled in): the sign-in page opens in a
+  popup, and after signing in Swagger UI sends the token with every request.  Swagger UI is an OAuth
+  client of its own, `temphire-swagger`, registered at startup in Development only, with PKCE and no
+  secret.  Its tokens are good at the API only, not at the MCP endpoint.
+- **What it describes**: the `api/` endpoints, each with what it does, its parameters, its
+  responses and who may call it.  Not the OAuth endpoints (`connect/*`, the sign-in pages, client
+  registration) or the MCP endpoint.  The descriptions come from the controllers' `///` comments, so
+  a new endpoint is documented where it is written; `SwaggerDocumentTests` fails for one without a
+  summary or with an undescribed response.
+- **Json.NET.**  The schemas come from Swashbuckle's Newtonsoft support, so they match what the API
+  sends: PascalCase on the Breeze endpoints, camelCase on the others.  The `$id`, `$ref` and `$type`
+  properties Breeze adds to every answer are not in the schemas.
+- **Breeze queries** (`IQueryable` endpoints) take their query as the whole query string, JSON such
+  as `?{"where":{"LastName":"Fuller"},"take":5}` URL-encoded.  OpenAPI can't describe a nameless
+  query string, so from Swagger UI they return every row you may see.  A **save** takes a Breeze save
+  bundle, which a Breeze client builds; Swagger UI shows its endpoint but can't help write one.
+- **Not in production.**  `SwaggerSetup` is only added in Development, like the sample users on the
+  sign-in page.
+
 ### In a client repository
 
 Each client repository has this repository as a submodule in `server/`.  Clone the client with
@@ -141,6 +172,8 @@ real SQL and need no SQL Server:
 | `ResourceQueryTests` | The staffing resource queries return what the client asks for, and load related collections with one SQL query each (the client's load and Quinn's) |
 | `AuthorizationRulesTests` | Every controller action declares who may call it, and the save and Quinn's tools check the same roles as the policies |
 | `QuinnUsageTests` | Quinn's budgets: days, weeks and months in UTC, which rule applies, what tokens cost (cache reads and writes included), and which budget stops a user and until when |
+| `BreezeQueryLimitsTests` | The query limits over HTTP, through the real filter pipeline: the 1000-row cap, how deep each endpoint may expand or select, that no `[BreezeQueryFilter]` attribute leaves a limit out, and rows in key order unless the client's `orderBy` replaces it |
+| `SwaggerDocumentTests` | The Swagger description, generated as the server generates it: only the API, every endpoint with a summary and described responses, 401 and the role policies' 403, and Json.NET's property names |
 
 ---
 
@@ -471,6 +504,42 @@ Each user belongs to a company, a **tenant**, and sees and changes only that com
 - **The client never sees the tenant.**  `TenantId` is a server-only column: it is left out of the
   JSON and of the Breeze metadata (`TempHirePersistenceManager.BuildJsonMetadata`), so it is not in
   the clients' generated entity classes either.
+
+### Query limits
+
+A Breeze client composes its own queries, so the server bounds what one may cost, following
+[Breeze's security guide](https://breeze.github.io/breeze-server-v3/guide/security).  The
+tenant filter above decides *who sees what*; these limits decide *how much one query may ask
+for*.
+
+| Endpoints | Rows (`MaxTake`) | `expand` / `select` depth (`MaxDepth`) |
+|---|---|---|
+| Every Breeze query, unless it says otherwise (registered globally) | 1000 | 2 |
+| `api/resourcemgt/StaffingResources`, the aggregate root | 1000 | 2: a resource with its addresses and their states |
+| The other `api/resourcemgt` queries (addresses, phone numbers, rates, skills, work experience, the search) | 1000 | 1: an address with its type, state or resource, nothing beyond |
+| `api/lookups` | 1000 | 0: no expand at all |
+
+- **Registered once**, in `BreezeQueryLimits.AddTo` (called from `Program.cs`), so a controller
+  added later is bounded whether or not its author thought about it.  An endpoint that doesn't
+  return an `IQueryable` is unaffected.
+- **A tighter limit goes on the controller or the action**, as its own
+  `[BreezeQueryFilter(MaxTake = BreezeQueryLimits.MaxTake, MaxDepth = 1)]`.  The filter nearest the
+  action answers the query and the global one then has nothing left to do, so such an attribute
+  must state **both** limits: one that leaves `MaxTake` out lifts the row cap (Breeze's default is
+  unlimited).  `BreezeQueryLimitsTests` fails for an attribute that leaves a limit out or loosens
+  it.
+- **Beyond the limits** a query answers `400 Bad Request`, naming the path (`MaxDepth exceeded:
+  Addresses.StaffingResource.PhoneNumbers`).  `MaxTake` doesn't refuse; it adds `Take(1000)`, and
+  it doesn't cap the collections an `expand` brings.
+- **Ordered by key.**  Every query action returns its set ordered by key (the search: by last name,
+  then key), so the cap takes the same rows every time, and EF Core doesn't warn about a `Take`
+  without an `OrderBy` on every query.  A client's `orderBy` replaces that order: Breeze applies
+  its first term with `OrderBy`, not `ThenBy`.  A new query action should order its set too.
+- **Expand works from the first request.**  Breeze plugs EF's `Include` into its query filter
+  only when the first persistence manager is created, by the Metadata endpoint or a save; until
+  then an `expand` was silently ignored (200, without the related entities).  The client apps load
+  the metadata first and never noticed; Swagger UI did.  `Program.cs` now calls
+  `TempHirePersistenceManager.InstallQueryHooks()` at startup.
 
 ---
 
@@ -817,9 +886,10 @@ temphire.server/
 │   │   └── SaveValidationStore.cs   # what the save-time rules read from the database
 │   ├── Validation/            # validation.metadata.json
 │   ├── Auth/                  # OAuth settings and clients, token claims, audience check, current tenant
+│   ├── Swagger/               # Swagger UI and the OpenAPI document, in Development
 │   ├── Views/                 # the sign-in and consent pages
 │   └── Program.cs
-└── TempHire.Server.Tests/     # saves, rules, sample data, queries, who may call what, budgets
+└── TempHire.Server.Tests/     # saves, rules, sample data, queries, who may call what, budgets, Swagger
 ```
 
 The `←` marks name what each part replaces in the original WPF version, in the
@@ -843,8 +913,9 @@ file carries a doc comment naming the file it came from.
   [Budgets: usage and quotas](#budgets-usage-and-quotas).  Budgets start over at midnight UTC, not in
   the company's time zone, and a budget can be overrun by the questions under way when it runs out.
 - **Search has no paging.** `StaffingResourceListItems` returns every match, exactly as
-  `StaffingResourceSearchService.Simple` did. `[BreezeQueryFilter(MaxTake = ...)]` is the place to
-  add a cap.
+  `StaffingResourceSearchService.Simple` did, up to the 1000-row cap
+  ([Query limits](#query-limits)); a search with more matches shows the first 1000 by last name,
+  and nothing tells the user there were more.
 - **The `.sdf` sample databases are not migrated.** The seed data is re-created from the ported
   `SampleDataProvider`, so the original nine people keep their ids (in Harbor Staffing), but any
   data you added to the old SQL Compact files does not come across.

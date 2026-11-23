@@ -51,7 +51,52 @@ public static class OAuthClients
         // The app's tokens are good at the API and at the MCP endpoint, which Quinn calls with them.
         descriptor.AddResourcePermissions([.. settings.AllResources]);
 
-        var existing = await manager.FindByClientIdAsync(OAuthSettings.SpaClientId, cancellationToken);
+        await CreateOrUpdateAsync(manager, descriptor, cancellationToken);
+    }
+
+    /// <summary>
+    /// Registers Swagger UI (development only, see <c>SwaggerSetup</c>), or brings its registration
+    /// up to date: a public client with PKCE, redirected back to <c>/swagger/oauth2-redirect.html</c>
+    /// on each of the server's origins, whose tokens are good at the API only.
+    /// </summary>
+    public static async Task RegisterSwaggerUiAsync(IServiceProvider services, CancellationToken cancellationToken = default)
+    {
+        var manager = services.GetRequiredService<IOpenIddictApplicationManager>();
+        var settings = services.GetRequiredService<OAuthSettings>();
+
+        var descriptor = new OpenIddictApplicationDescriptor
+        {
+            ClientId = OAuthSettings.SwaggerClientId,
+            DisplayName = "TempHire API (Swagger UI)",
+            ClientType = ClientTypes.Public,
+            // A developer tool served by this server itself: no consent screen.
+            ConsentType = ConsentTypes.Implicit,
+            Requirements = { Requirements.Features.ProofKeyForCodeExchange }
+        };
+
+        foreach (var origin in settings.Origins)
+        {
+            descriptor.RedirectUris.Add(new Uri(origin + OAuthSettings.SwaggerCallbackPath));
+        }
+
+        descriptor.Permissions.UnionWith(
+        [
+            Permissions.Endpoints.Authorization,
+            Permissions.Endpoints.Token,
+            Permissions.GrantTypes.AuthorizationCode,
+            Permissions.ResponseTypes.Code,
+            Permissions.Prefixes.Scope + OAuthSettings.StaffingScope
+        ]);
+
+        descriptor.AddResourcePermissions([.. settings.ApiResources]);
+
+        await CreateOrUpdateAsync(manager, descriptor, cancellationToken);
+    }
+
+    private static async Task CreateOrUpdateAsync(
+        IOpenIddictApplicationManager manager, OpenIddictApplicationDescriptor descriptor, CancellationToken cancellationToken)
+    {
+        var existing = await manager.FindByClientIdAsync(descriptor.ClientId!, cancellationToken);
         if (existing is null)
         {
             await manager.CreateAsync(descriptor, cancellationToken);

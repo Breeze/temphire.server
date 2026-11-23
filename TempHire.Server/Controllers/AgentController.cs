@@ -11,6 +11,9 @@ using TempHire.Server.Auth;
 namespace TempHire.Server.Controllers;
 
 /// <summary>
+/// Quinn, the AI assistant: ask about the company's staffing data.
+/// </summary>
+/// <remarks>
 /// Quinn's endpoint.  The client app sends the conversation so far and gets Quinn's answer, in
 /// Markdown.  The agent runs here, on the server, never in the browser: the model, its API key and
 /// the tools stay out of the client's reach.
@@ -20,7 +23,7 @@ namespace TempHire.Server.Controllers;
 /// no chat state.  Only user and assistant messages are accepted; the system prompt is the
 /// server's alone.
 /// </para>
-/// </summary>
+/// </remarks>
 [ApiController]
 [Authorize]
 [Route("api/agent/[action]")]
@@ -46,7 +49,9 @@ public class AgentController(
     private readonly QuinnUsageStore _usage = usage;
     private readonly ILogger<AgentController> _logger = logger;
 
-    /// <summary>Who answers: Quinn's name and the model, for the chat pane's header.</summary>
+    /// <summary>Who answers: Quinn's name, the model and the user's company.</summary>
+    /// <remarks>For the chat pane's header.</remarks>
+    /// <response code="200">Quinn's name, the model and the company.</response>
     [HttpGet]
     public ActionResult<AgentInfo> Info() => new AgentInfo
     {
@@ -55,9 +60,10 @@ public class AgentController(
         CompanyName = CompanyName
     };
 
-    /// <summary>
-    /// Answers the last question of the conversation, streamed as newline-delimited JSON
-    /// (<c>application/x-ndjson</c>): one <see cref="QuinnUpdate"/> per line - <c>text</c> pieces as
+    /// <summary>Answers the last question of the conversation, streamed as newline-delimited JSON.</summary>
+    /// <remarks>
+    /// Send the whole conversation so far; the last message must be the user's.  The answer comes
+    /// as <c>application/x-ndjson</c>: one update per line - <c>text</c> pieces as
     /// the model writes them, the <c>people</c> the answer can mention as the tools return them,
     /// and <c>done</c> at the end.  Turning those people into links is up to the client.
     ///
@@ -73,8 +79,24 @@ public class AgentController(
     /// recorded when the answer ends, however it ends - finished, failed or cancelled - since the
     /// model calls made so far have been paid for either way.
     /// </para>
-    /// </summary>
+    /// </remarks>
+    /// <param name="request">The conversation: up to the last 30 messages count, each cut at 4000 characters.</param>
+    /// <param name="cancellationToken">Cancelled when the client disconnects.</param>
+    /// <response code="200">
+    /// The answer, streamed: one JSON object per line, <c>{"type": "text", "content": "..."}</c>,
+    /// <c>{"type": "people", "people": [{"name": "...", "id": "..."}]}</c> (replacing any earlier
+    /// list), <c>{"type": "done"}</c> when the answer is complete, or
+    /// <c>{"type": "error", "content": "..."}</c> if it fails part-way.
+    /// </response>
+    /// <response code="400">No question: the conversation is empty or doesn't end with the user's message.</response>
+    /// <response code="429">The user or their company has used up a token quota; <c>Retry-After</c> says when it resets.</response>
+    /// <response code="503">The model can't be reached (Ollama not running, no API key).</response>
     [HttpPost]
+    [Consumes("application/json")]
+    [ProducesResponseType(typeof(void), StatusCodes.Status200OK, "application/x-ndjson")]
+    [ProducesResponseType(typeof(ErrorResult), StatusCodes.Status400BadRequest, "application/json")]
+    [ProducesResponseType(typeof(ErrorResult), StatusCodes.Status429TooManyRequests, "application/json")]
+    [ProducesResponseType(typeof(ErrorResult), StatusCodes.Status503ServiceUnavailable, "application/json")]
     public async Task<IActionResult> Chat([FromBody] ChatRequest request, CancellationToken cancellationToken)
     {
         if (UsageCaller.From(User) is not { } caller)
@@ -234,6 +256,7 @@ public class AgentController(
 [JsonObject(NamingStrategyType = typeof(CamelCaseNamingStrategy))]
 public class ChatRequest
 {
+    /// <summary>The conversation so far, oldest first, ending with the user's question.</summary>
     public List<ChatRequestMessage> Messages { get; set; }
 }
 
@@ -243,13 +266,19 @@ public class ChatRequestMessage
     /// <summary><c>user</c> or <c>assistant</c>.</summary>
     public string Role { get; set; }
 
+    /// <summary>The message, in Markdown.</summary>
     public string Content { get; set; }
 }
 
 [JsonObject(NamingStrategyType = typeof(CamelCaseNamingStrategy))]
 public class AgentInfo
 {
+    /// <summary>The assistant's name.</summary>
     public string Name { get; set; }
+
+    /// <summary>The model that answers, as shown to the user.</summary>
     public string Model { get; set; }
+
+    /// <summary>The signed-in user's company, whose data Quinn answers about.</summary>
     public string CompanyName { get; set; }
 }

@@ -7,8 +7,9 @@ using TempHire.Server.Persistence;
 namespace TempHire.Server.Controllers;
 
 /// <summary>
-/// The lookup tables: states, address types, phone number types and rate types.
-///
+/// The lookup tables: states, address types, phone number types and rate types.  Breeze queries.
+/// </summary>
+/// <remarks>
 /// <para>
 /// The lookups are a cross-cutting concern, not part of one workspace: the client loads them all
 /// with one query at sign-in (<see cref="AllTypes"/>) into a "master" EntityManager, and every unit
@@ -21,15 +22,22 @@ namespace TempHire.Server.Controllers;
 /// <para>
 /// A signed-in user, no particular role: the client loads them whatever the user's role.
 /// </para>
-/// </summary>
+/// <para>
+/// No <c>expand</c> or navigation <c>select</c> at all (<c>MaxDepth = 0</c>): a lookup is a flat
+/// table the client caches whole, with nothing to reach through it.  The row cap is the app's
+/// (<see cref="BreezeQueryLimits"/>), restated because this attribute replaces the global one.
+/// </para>
+/// </remarks>
 [Route("api/lookups/[action]")]
-[BreezeQueryFilter]
+[BreezeQueryFilter(MaxTake = BreezeQueryLimits.MaxTake, MaxDepth = 0)]
 [Authorize]
 public class LookupsController(TempHireDbContext dbContext) : ControllerBase
 {
-    /// <summary>
-    /// One-shot load of every lookup table at sign-in: all the lookup types, in one bundle.
-    /// </summary>
+    /// <summary>Every lookup table, in one bundle.</summary>
+    /// <remarks>
+    /// The client loads this once at sign-in.  Not a Breeze query: it takes no query string.
+    /// </remarks>
+    /// <response code="200">The address types, phone number types, rate types and states.</response>
     [HttpGet]
     public LookupBundle AllTypes()
     {
@@ -46,17 +54,25 @@ public class LookupsController(TempHireDbContext dbContext) : ControllerBase
         };
     }
 
+    /// <summary>The address types (home, mailing, work).</summary>
+    /// <response code="200">The address types the query selects.</response>
     [HttpGet]
-    public IQueryable<AddressType> AddressTypes() => dbContext.AddressTypes;
+    public IQueryable<AddressType> AddressTypes() => dbContext.AddressTypes.OrderBy(t => t.Id);
 
+    /// <summary>The phone number types (home, mobile, work).</summary>
+    /// <response code="200">The phone number types the query selects.</response>
     [HttpGet]
-    public IQueryable<PhoneNumberType> PhoneNumberTypes() => dbContext.PhoneNumberTypes;
+    public IQueryable<PhoneNumberType> PhoneNumberTypes() => dbContext.PhoneNumberTypes.OrderBy(t => t.Id);
 
+    /// <summary>The rate types (hourly, daily, weekly, monthly).</summary>
+    /// <response code="200">The rate types the query selects.</response>
     [HttpGet]
-    public IQueryable<RateType> RateTypes() => dbContext.RateTypes;
+    public IQueryable<RateType> RateTypes() => dbContext.RateTypes.OrderBy(t => t.Id);
 
+    /// <summary>The US states and the District of Columbia.</summary>
+    /// <response code="200">The states the query selects.</response>
     [HttpGet]
-    public IQueryable<State> States() => dbContext.States;
+    public IQueryable<State> States() => dbContext.States.OrderBy(s => s.Id);
 }
 
 /// <summary>

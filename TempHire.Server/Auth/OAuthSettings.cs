@@ -33,6 +33,15 @@ public class OAuthSettings
     /// <summary>The client app, a public client: it has no secret and proves itself with PKCE.</summary>
     public const string SpaClientId = "temphire-spa";
 
+    /// <summary>
+    /// Swagger UI, in development: a public client too, whose tokens are good at the API only.
+    /// See <c>SwaggerSetup</c>.
+    /// </summary>
+    public const string SwaggerClientId = "temphire-swagger";
+
+    /// <summary>Where the authorization server sends the browser back to Swagger UI.</summary>
+    public const string SwaggerCallbackPath = "/swagger/oauth2-redirect.html";
+
     /// <summary>Access to the company's staffing data, through the API or the MCP endpoint.</summary>
     public const string StaffingScope = "staffing";
 
@@ -71,6 +80,8 @@ public class OAuthSettings
     public IEnumerable<string> AllResources => Origins.SelectMany(o => new[] { ApiResource(o), McpResource(o) });
 
     public IEnumerable<string> McpResources => Origins.Select(McpResource);
+
+    public IEnumerable<string> ApiResources => Origins.Select(ApiResource);
 
     /// <summary>The origin a request came in on, as the token audience names it.</summary>
     public static string OriginOf(HttpRequest request) => Normalize($"{request.Scheme}://{request.Host}");

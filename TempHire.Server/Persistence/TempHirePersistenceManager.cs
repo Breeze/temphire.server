@@ -38,13 +38,15 @@ namespace TempHire.Server.Persistence;
 ///   </item>
 /// </list>
 /// <para>
-/// Saves are asynchronous (<see cref="SaveChangesAsync"/>): validation rules may be, and the rules
+/// Saves are asynchronous (<c>SaveChangesAsync</c>): validation rules may be, and the rules
 /// read the database.  Breeze's asynchronous save calls the synchronous hooks as well as the
 /// asynchronous ones, so the per-entity checks stay in <see cref="BeforeSaveEntity"/>, and the rest is
 /// in <see cref="BeforeSaveEntitiesAsync"/>.  The synchronous <see cref="SaveChanges"/> would skip it,
 /// so it refuses to run.
 /// </para>
 /// </summary>
+/// <param name="dbContext">The staffing data the save goes to.</param>
+/// <param name="principal">The signed-in user: their role decides whether they may save, and their name goes in the audit columns.</param>
 /// <param name="validation">
 /// Checks the validation metadata, data annotations included, on every save.
 /// </param>
@@ -56,6 +58,21 @@ public class TempHirePersistenceManager(
 {
     private readonly ClaimsPrincipal _principal = principal;
     private readonly ValidationService _validation = validation ?? throw new ArgumentNullException(nameof(validation));
+
+    /// <summary>
+    /// Plugs EF Core into Breeze's query filter, at startup: call it once before the first request.
+    /// </summary>
+    /// <remarks>
+    /// <c>[BreezeQueryFilter]</c> applies a client's <c>expand</c> through
+    /// <c>EntityQuery.ApplyExpand</c>, which is a no-op until <c>EFPersistenceManager</c>'s static
+    /// constructor replaces it with EF's <c>Include</c> (and adds <c>AsNoTracking</c> to queries).
+    /// That constructor runs when a persistence manager is first created - by the Metadata endpoint
+    /// or a save.  The client apps load the metadata first, so they never noticed; but a query that
+    /// comes first after a restart (Swagger UI, any other caller) had its expand silently ignored:
+    /// 200, with the related entities left out.  Running the constructor at startup closes that.
+    /// </remarks>
+    public static void InstallQueryHooks() =>
+        System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(EFPersistenceManager<TempHireDbContext>).TypeHandle);
 
     private string CurrentUserName =>
         _principal?.Identity?.Name
@@ -149,7 +166,7 @@ public class TempHirePersistenceManager(
         return true;
     }
 
-    /// <summary>Not supported: a save must be asynchronous, see <see cref="SaveChangesAsync"/>.</summary>
+    /// <summary>Not supported: a save must be asynchronous, see <c>SaveChangesAsync</c>.</summary>
     public new SaveResult SaveChanges(JObject saveBundle, TransactionSettings transactionSettings = null) =>
         throw new NotSupportedException(
             "TempHire saves asynchronously, so that validation rules can be asynchronous: use SaveChangesAsync.");
