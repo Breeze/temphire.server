@@ -140,11 +140,13 @@ public static class SwaggerSetup
                 return;
             }
 
-            // The limits that apply: the filter nearest the action answers the query.
+            // The limits that apply: the filter nearest the action answers the query, and a limit it
+            // leaves unset (read back as -1) comes from the global filter.  None of TempHire's
+            // attributes sets -1 to lift a limit.
             var filter = action.MethodInfo.GetCustomAttribute<BreezeQueryFilterAttribute>()
                          ?? action.ControllerTypeInfo.GetCustomAttribute<BreezeQueryFilterAttribute>();
-            var maxTake = filter?.MaxTake ?? BreezeQueryLimits.MaxTake;
-            var maxDepth = filter?.MaxDepth ?? BreezeQueryLimits.MaxDepth;
+            var maxTake = filter is { MaxTake: >= 0 } ? filter.MaxTake : BreezeQueryLimits.MaxTake;
+            var maxDepth = filter is { MaxDepth: >= 0 } ? filter.MaxDepth : BreezeQueryLimits.MaxDepth;
 
             var note = "A Breeze query: a Breeze client can add a query (JSON, such as "
                        + "`{\"where\":{\"LastName\":\"Smith\"},\"take\":5}`, URL-encoded) as the whole query string. "

@@ -15,13 +15,11 @@ namespace TempHire.Server.Controllers;
 /// </para>
 /// <para>
 /// <b>A tighter limit goes on the controller or the action</b>, as a <c>[BreezeQueryFilter]</c> of its
-/// own: the filter nearest the action runs first and answers the query, and the global one then finds
-/// nothing left to do.  So such an attribute must state <i>both</i> limits - one that leaves
-/// <c>MaxTake</c> out lifts the row cap, since Breeze's default is unlimited (-1).  Use the constants
-/// here:
+/// own that sets only that limit.  The filter nearest the action answers the query, and a limit it
+/// leaves unset comes from the global one (Breeze 8.0.1 and later), so the row cap stays:
 /// </para>
 /// <code>
-/// [BreezeQueryFilter(MaxTake = BreezeQueryLimits.MaxTake, MaxDepth = 1)]
+/// [BreezeQueryFilter(MaxDepth = 1)]
 /// </code>
 /// <para>
 /// These bound what a query may cost; they don't decide who sees what.  That is the queryable each

@@ -367,10 +367,6 @@ var app = builder.Build();
 // development, where it helps, and leave it out everywhere else.
 Breeze.Persistence.BreezeConfig.Instance.IncludeStackTraceInErrors = app.Environment.IsDevelopment();
 
-// EF Core's expand (Include) for Breeze queries, from the first request on: without it, a query
-// that comes before any metadata request or save has its expand silently ignored.
-TempHirePersistenceManager.InstallQueryHooks();
-
 // ---------------------------------------------------------------------------------------------
 // Metadata export:  dotnet run -- --export-metadata <file>
 //

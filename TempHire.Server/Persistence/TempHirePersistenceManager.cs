@@ -59,25 +59,6 @@ public class TempHirePersistenceManager(
     private readonly ClaimsPrincipal _principal = principal;
     private readonly ValidationService _validation = validation ?? throw new ArgumentNullException(nameof(validation));
 
-    /// <summary>
-    /// Plugs EF Core into Breeze's query filter, at startup: call it once before the first request.
-    /// </summary>
-    /// <remarks>
-    /// <c>[BreezeQueryFilter]</c> applies a client's <c>expand</c> through
-    /// <c>EntityQuery.ApplyExpand</c>, which is a no-op until <c>EFPersistenceManager</c>'s static
-    /// constructor replaces it with EF's <c>Include</c>.  (The same constructor installs
-    /// <c>EntityQuery.ApplyCustomLogic</c>, which adds <c>AsNoTracking</c> only to a query whose
-    /// <c>select</c> projects a non-System type, for EF's owned types; other queries are unaffected.)
-    /// That constructor runs when a persistence manager is first created - by the Metadata endpoint
-    /// or a save.  The client apps load the metadata first, so they never noticed; but a query that
-    /// comes first after a restart (Swagger UI, any other caller) had its expand silently ignored:
-    /// 200, with the related entities left out.  Running the constructor at startup closes that.
-    /// Breeze 8.0.0 needs this; a fix in Breeze itself, which installs the hooks from the query
-    /// filter, is in review (Breeze/breeze-server-v3#1).
-    /// </remarks>
-    public static void InstallQueryHooks() =>
-        System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(typeof(EFPersistenceManager<TempHireDbContext>).TypeHandle);
-
     private string CurrentUserName =>
         _principal?.Identity?.Name
         ?? _principal?.FindFirst(ClaimTypes.Name)?.Value

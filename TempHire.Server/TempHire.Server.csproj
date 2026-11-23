@@ -15,9 +15,9 @@
   <ItemGroup>
     <!-- Breeze: the direct replacement for the DevForce server-side runtime. -->
     <PackageReference Include="Anthropic" Version="13.8.0" />
-    <PackageReference Include="Breeze.AspNetCore.NetCore" Version="8.0.0" />
+    <PackageReference Include="Breeze.AspNetCore.NetCore" Version="8.0.1" />
     <PackageReference Include="IdeaBlade.Validation" Version="0.1.0" />
-    <PackageReference Include="Breeze.Persistence.EFCore" Version="8.0.0" />
+    <PackageReference Include="Breeze.Persistence.EFCore" Version="8.0.1" />
     <!-- Breeze serializes entities with Json.NET, so MVC has to as well. -->
     <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="10.0.15" />
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.11.0" />

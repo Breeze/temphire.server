@@ -518,11 +518,9 @@ for*.
   added later is bounded whether or not its author thought about it.  An endpoint that doesn't
   return an `IQueryable` is unaffected.
 - **A tighter limit goes on the controller or the action**, as its own
-  `[BreezeQueryFilter(MaxTake = BreezeQueryLimits.MaxTake, MaxDepth = 1)]`.  The filter nearest the
-  action answers the query and the global one then has nothing left to do, so such an attribute
-  must state **both** limits: one that leaves `MaxTake` out lifts the row cap (Breeze's default is
-  unlimited).  `BreezeQueryLimitsTests` fails for an attribute that leaves a limit out or loosens
-  it.
+  `[BreezeQueryFilter(MaxDepth = 1)]`.  The filter nearest the action answers the query, and a
+  limit it leaves unset comes from the global one, so the row cap stays.  `BreezeQueryLimitsTests`
+  fails for an attribute that loosens a limit.
 - **Beyond the limits** a query answers `400 Bad Request`, naming the path (`MaxDepth exceeded:
   Addresses.StaffingResource.PhoneNumbers`).  `MaxTake` doesn't refuse; it adds `Take(1000)`, and
   it doesn't cap the collections an `expand` brings.
@@ -530,11 +528,6 @@ for*.
   then key), so the cap takes the same rows every time, and EF Core doesn't warn about a `Take`
   without an `OrderBy` on every query.  A client's `orderBy` replaces that order: Breeze applies
   its first term with `OrderBy`, not `ThenBy`.  A new query action should order its set too.
-- **Expand works from the first request.**  Breeze plugs EF's `Include` into its query filter
-  only when the first persistence manager is created, by the Metadata endpoint or a save; until
-  then an `expand` was silently ignored (200, without the related entities).  The client apps load
-  the metadata first and never noticed; Swagger UI did.  `Program.cs` now calls
-  `TempHirePersistenceManager.InstallQueryHooks()` at startup.
 
 ---
 
