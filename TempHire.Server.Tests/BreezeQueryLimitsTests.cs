@@ -29,9 +29,9 @@ namespace TempHire.Server.Tests;
 /// lookups and on Resource Management's detail queries.
 ///
 /// <para>
-/// Through HTTP because the limits live in MVC's filters, and their order is the point: the filter
-/// nearest the action answers the query.  A controller attribute that left the limits out would
-/// lift them, and only a request shows it.
+/// Through HTTP because the limits live in MVC's filters, and how they combine is the point: the
+/// filter nearest the action answers the query, with the limits it leaves unset taken from the
+/// global one.  Only a request shows that.
 /// </para>
 /// </summary>
 public sealed class BreezeQueryLimitsTests : IAsyncLifetime
@@ -42,9 +42,6 @@ public sealed class BreezeQueryLimitsTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        // As Program.cs does at startup: without it, expand is ignored until a persistence manager exists.
-        TempHirePersistenceManager.InstallQueryHooks();
-
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Logging.ClearProviders();
@@ -105,7 +102,7 @@ public sealed class BreezeQueryLimitsTests : IAsyncLifetime
     [Fact]
     public async Task The_tighter_filters_keep_the_row_cap()
     {
-        // An attribute of its own replaces the global filter; it must restate MaxTake, or the cap is gone.
+        // These attributes set only MaxDepth; the row cap comes from the global filter.
         StoreStates(1001);
         Assert.Equal(1000, await CountAsync("lookups/States"));
 
@@ -230,13 +227,12 @@ public sealed class BreezeQueryLimitsTests : IAsyncLifetime
     // ---- No attribute loosens them ----------------------------------------------------------------
 
     /// <summary>
-    /// A <c>[BreezeQueryFilter]</c> on a controller or action runs before the global one and answers
-    /// the query, so the global filter's limits don't reach it: one that leaves a limit out (-1,
-    /// Breeze's default) lifts it for every query with a query string.  The global filter covers a
-    /// controller with no attribute; this covers one whose attribute forgot the limits.
+    /// A <c>[BreezeQueryFilter]</c> on a controller or action may tighten a limit, never loosen it.  A
+    /// limit it leaves unset (read back as -1) comes from the global filter; the request tests above
+    /// show that for the row cap.
     /// </summary>
     [Fact]
-    public void Every_query_filter_attribute_keeps_the_limits()
+    public void No_query_filter_attribute_loosens_the_limits()
     {
         var attributes = typeof(ResourceMgtController).Assembly.GetTypes()
             .Where(t => typeof(Microsoft.AspNetCore.Mvc.ControllerBase).IsAssignableFrom(t))
@@ -249,7 +245,7 @@ public sealed class BreezeQueryLimitsTests : IAsyncLifetime
         Assert.NotEmpty(attributes);
         Assert.All(attributes, a =>
         {
-            Assert.True(a.MaxTake is >= 0 and <= BreezeQueryLimits.MaxTake, $"{a.Where}: MaxTake {a.MaxTake}");
+            Assert.True(a.MaxTake is -1 or (>= 0 and <= BreezeQueryLimits.MaxTake), $"{a.Where}: MaxTake {a.MaxTake}");
             Assert.True(a.MaxDepth is >= 0 and <= BreezeQueryLimits.MaxDepth, $"{a.Where}: MaxDepth {a.MaxDepth}");
         });
     }
