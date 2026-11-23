@@ -22,6 +22,7 @@ using TempHire.Server.Agent.Usage;
 using TempHire.Server.Auth;
 using TempHire.Server.Mcp;
 using TempHire.Server.Persistence;
+using TempHire.Server.Swagger;
 using TempHire.Server.Validation;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -349,6 +350,14 @@ builder.Services.AddCors(options =>
         .AllowAnyHeader()
         .AllowAnyMethod()));
 
+// ---------------------------------------------------------------------------------------------
+// Swagger - the API's OpenAPI description and Swagger UI, in development only (see SwaggerSetup)
+// ---------------------------------------------------------------------------------------------
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddTempHireSwagger();
+}
+
 var app = builder.Build();
 
 // Breeze 8 no longer puts the server stack trace in error responses by default; keep it in
@@ -402,6 +411,12 @@ using (var scope = app.Services.CreateScope())
 
     // The client app's registration, kept in step with the configuration.
     await OAuthClients.RegisterSpaAsync(scope.ServiceProvider);
+
+    // Swagger UI's registration, likewise; in development only, like Swagger UI itself.
+    if (app.Environment.IsDevelopment())
+    {
+        await OAuthClients.RegisterSwaggerUiAsync(scope.ServiceProvider);
+    }
 }
 
 if (app.Environment.IsDevelopment())
@@ -415,6 +430,12 @@ if (app.Environment.IsDevelopment())
 // (TempHirePolicies) would otherwise ask for a signed-in user for every script and stylesheet.
 app.UseDefaultFiles();
 app.UseStaticFiles();
+
+// Swagger UI at /swagger, also before routing and authorization: see SwaggerSetup.
+if (app.Environment.IsDevelopment())
+{
+    app.UseTempHireSwagger();
+}
 
 app.UseRouting();
 app.UseCors(DevCorsPolicy);
@@ -436,6 +457,14 @@ app.MapMcp("/mcp").RequireAuthorization();
 foreach (var serverPath in new[] { "/.well-known", "/connect", "/api", "/mcp" })
 {
     app.Map(serverPath + "/{**rest}", () => Results.NotFound()).AllowAnonymous();
+}
+
+// In development the server's own root goes straight to Swagger UI: the client apps run on their
+// dev servers there.  A client build copied into wwwroot still wins - UseDefaultFiles above serves
+// its index.html at / before routing gets here.
+if (app.Environment.IsDevelopment())
+{
+    app.MapGet("/", () => Results.Redirect("/" + SwaggerSetup.RoutePrefix)).AllowAnonymous().ExcludeFromDescription();
 }
 
 app.MapFallbackToFile("index.html").AllowAnonymous();

@@ -24,6 +24,7 @@ from the original Silverlight and WPF versions, and the client side.
 - [Prerequisites](#prerequisites)
 - [Running it](#running-it)
   - [Sample users](#sample-users)
+  - [Swagger](#swagger)
   - [In a client repository](#in-a-client-repository)
   - [Tests](#tests)
 - [Quinn, the assistant](#quinn-the-assistant)
@@ -97,6 +98,35 @@ An **Editor** can add, change and delete staffing resources; a **Reader** can on
 (see [Roles](#roles)).  When the server runs in the Development environment, its sign-in page lists
 the sample users, and a click on one signs in as that user; anywhere else it doesn't offer them.
 
+### Swagger
+
+In the Development environment the server describes its API with
+[Swashbuckle](https://github.com/domaindrivendev/Swashbuckle.AspNetCore): Swagger UI at
+**`http://localhost:5000/swagger`**, and the OpenAPI document at `/swagger/v1/swagger.json`.  The
+server's own root, `http://localhost:5000/`, goes straight there, unless a client build has been
+copied into `wwwroot`, which then keeps its place at `/`.  In a client repository, use the port that
+client's server runs on (5100 for React).
+
+- **Signing in.**  Every endpoint needs an access token.  Click **Authorize**, then **Authorize** in
+  the dialog (the client id and the `staffing` scope are filled in): the sign-in page opens in a
+  popup, and after signing in Swagger UI sends the token with every request.  Swagger UI is an OAuth
+  client of its own, `temphire-swagger`, registered at startup in Development only, with PKCE and no
+  secret.  Its tokens are good at the API only, not at the MCP endpoint.
+- **What it describes**: the `api/` endpoints, each with what it does, its parameters, its
+  responses and who may call it.  Not the OAuth endpoints (`connect/*`, the sign-in pages, client
+  registration) or the MCP endpoint.  The descriptions come from the controllers' `///` comments, so
+  a new endpoint is documented where it is written; `SwaggerDocumentTests` fails for one without a
+  summary or with an undescribed response.
+- **Json.NET.**  The schemas come from Swashbuckle's Newtonsoft support, so they match what the API
+  sends: PascalCase on the Breeze endpoints, camelCase on the others.  The `$id`, `$ref` and `$type`
+  properties Breeze adds to every answer are not in the schemas.
+- **Breeze queries** (`IQueryable` endpoints) take their query as the whole query string, JSON such
+  as `?{"where":{"LastName":"Fuller"},"take":5}` URL-encoded.  OpenAPI can't describe a nameless
+  query string, so from Swagger UI they return every row you may see.  A **save** takes a Breeze save
+  bundle, which a Breeze client builds; Swagger UI shows its endpoint but can't help write one.
+- **Not in production.**  `SwaggerSetup` is only added in Development, like the sample users on the
+  sign-in page.
+
 ### In a client repository
 
 Each client repository has this repository as a submodule in `server/`.  Clone the client with
@@ -141,6 +171,7 @@ real SQL and need no SQL Server:
 | `ResourceQueryTests` | The staffing resource queries return what the client asks for, and load related collections with one SQL query each (the client's load and Quinn's) |
 | `AuthorizationRulesTests` | Every controller action declares who may call it, and the save and Quinn's tools check the same roles as the policies |
 | `QuinnUsageTests` | Quinn's budgets: days, weeks and months in UTC, which rule applies, what tokens cost (cache reads and writes included), and which budget stops a user and until when |
+| `SwaggerDocumentTests` | The Swagger description, generated as the server generates it: only the API, every endpoint with a summary and described responses, 401 and the role policies' 403, and Json.NET's property names |
 
 ---
 
@@ -817,9 +848,10 @@ temphire.server/
 │   │   └── SaveValidationStore.cs   # what the save-time rules read from the database
 │   ├── Validation/            # validation.metadata.json
 │   ├── Auth/                  # OAuth settings and clients, token claims, audience check, current tenant
+│   ├── Swagger/               # Swagger UI and the OpenAPI document, in Development
 │   ├── Views/                 # the sign-in and consent pages
 │   └── Program.cs
-└── TempHire.Server.Tests/     # saves, rules, sample data, queries, who may call what, budgets
+└── TempHire.Server.Tests/     # saves, rules, sample data, queries, who may call what, budgets, Swagger
 ```
 
 The `←` marks name what each part replaces in the original WPF version, in the

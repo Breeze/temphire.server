@@ -13,6 +13,10 @@ using TempHire.Server.Persistence;
 namespace TempHire.Server.Controllers;
 
 /// <summary>
+/// The Resource Management workspace: staffing resources and their details, the search, and saves.
+/// Breeze queries and a Breeze save.
+/// </summary>
+/// <remarks>
 /// The Resource Management workspace's data: its queries, its search and its saves.  The client's
 /// <c>ResourceMgtUnitOfWork</c> talks to this controller and no other.
 ///
@@ -35,7 +39,7 @@ namespace TempHire.Server.Controllers;
 /// (<see cref="TempHirePolicies.EditStaffingData"/>).  <see cref="TempHirePersistenceManager"/>
 /// checks the Editor role again for every save.
 /// </para>
-/// </summary>
+/// </remarks>
 [Route("api/resourcemgt/[action]")]
 [BreezeQueryFilter]
 [Authorize]
@@ -55,19 +59,32 @@ public class ResourceMgtController(TempHireDbContext dbContext, ValidationServic
 
     private TempHireDbContext Context => _dbContext;
 
-    /// <summary>
+    /// <summary>Saves a change set: added, modified and deleted entities, in one transaction.</summary>
+    /// <remarks>
     /// The workspace's write endpoint.  Replaces DevForce's <c>EntityManager.SaveChangesAsync</c>
-    /// round trip; the change set arrives as a Breeze "save bundle".  Editors only: anyone else gets
-    /// 403 before the bundle is read.
-    /// </summary>
+    /// round trip; the change set arrives as a Breeze "save bundle" (<c>{"entities": [...],
+    /// "saveOptions": {...}}</c>, each entity with its <c>entityAspect</c>), which a Breeze client
+    /// builds.  Editors only: anyone else gets 403 before the bundle is read.  Every rule is checked
+    /// again on the server; a save that breaks one saves nothing.
+    /// </remarks>
+    /// <param name="saveBundle">The Breeze save bundle.</param>
+    /// <param name="cancellationToken">Cancelled when the client disconnects.</param>
+    /// <response code="200">Saved: the saved entities, with their new row versions, and any key mappings.</response>
+    /// <response code="403">
+    /// Nothing saved, also when the change set breaks a validation rule or includes a read-only type
+    /// (Breeze's entity-errors problem, with each entity's errors), or touches another company's data.
+    /// </response>
+    /// <response code="409">Someone else changed one of the entities since it was loaded.</response>
     [HttpPost]
+    [Consumes("application/json")]
     [Authorize(Policy = TempHirePolicies.EditStaffingData)]
     public async Task<ActionResult<SaveResult>> SaveChanges([FromBody] JObject saveBundle, CancellationToken cancellationToken)
     {
         return await PersistenceManager.SaveChangesAsync(saveBundle, cancellationToken: cancellationToken);
     }
 
-    /// <summary>
+    /// <summary>The staffing resources, with any related entities the query expands.</summary>
+    /// <remarks>
     /// Aggregate root query: the resources alone, unless the client asks for related entities with
     /// <c>.expand(...)</c>.  The client decides what a load brings: its
     /// <c>StaffingResourceRepository.withId</c> expands every child collection, as the original's
@@ -80,7 +97,8 @@ public class ResourceMgtController(TempHireDbContext dbContext, ValidationServic
     /// collection.  As a single query, the JOINs multiply the rows (addresses x phone numbers x
     /// rates x skills x work experience per resource), and EF Core warns about it.
     /// </para>
-    /// </summary>
+    /// </remarks>
+    /// <response code="200">The staffing resources the query selects.</response>
     [HttpGet]
     [Authorize(Policy = TempHirePolicies.ReadStaffingData)]
     public IQueryable<StaffingResource> StaffingResources()
@@ -88,27 +106,40 @@ public class ResourceMgtController(TempHireDbContext dbContext, ValidationServic
         return Context.StaffingResources.AsSplitQuery();
     }
 
+    /// <summary>The staffing resources' addresses.</summary>
+    /// <response code="200">The addresses the query selects.</response>
     [HttpGet]
     [Authorize(Policy = TempHirePolicies.ReadStaffingData)]
     public IQueryable<Address> Addresses() => Context.Addresses;
 
+    /// <summary>The staffing resources' phone numbers.</summary>
+    /// <response code="200">The phone numbers the query selects.</response>
     [HttpGet]
     [Authorize(Policy = TempHirePolicies.ReadStaffingData)]
     public IQueryable<PhoneNumber> PhoneNumbers() => Context.PhoneNumbers;
 
+    /// <summary>The staffing resources' rates.</summary>
+    /// <response code="200">The rates the query selects.</response>
     [HttpGet]
     [Authorize(Policy = TempHirePolicies.ReadStaffingData)]
     public IQueryable<Rate> Rates() => Context.Rates;
 
+    /// <summary>The staffing resources' skills.</summary>
+    /// <response code="200">The skills the query selects.</response>
     [HttpGet]
     [Authorize(Policy = TempHirePolicies.ReadStaffingData)]
     public IQueryable<Skill> Skills() => Context.Skills;
 
+    /// <summary>The staffing resources' work experience.</summary>
+    /// <response code="200">The work experience items the query selects.</response>
     [HttpGet]
     [Authorize(Policy = TempHirePolicies.ReadStaffingData)]
     public IQueryable<WorkExperienceItem> WorkExperienceItems() => Context.WorkExperienceItems;
 
     /// <summary>
+    /// Searches the staffing resources: one row each, with the primary address and phone number.
+    /// </summary>
+    /// <remarks>
     /// Backs the search grid.  Port of <c>DomainServices/Services/StaffingResourceSearchService.cs</c>,
     /// whose <c>Simple(text)</c> built a LINQ predicate over first/middle/last name, the primary
     /// address and the primary phone number, then projected into
@@ -120,7 +151,12 @@ public class ResourceMgtController(TempHireDbContext dbContext, ValidationServic
     /// ordering by last name.  The result type is not an entity, so Breeze returns it to the client
     /// as a plain DTO - the direct analogue of DevForce's <c>IKnownType</c> projection.
     /// </para>
-    /// </summary>
+    /// </remarks>
+    /// <param name="searchText">
+    /// Text to look for in the first, middle and last name, and in the primary address and phone
+    /// number.  Leave it out for everyone.
+    /// </param>
+    /// <response code="200">The matching resources, ordered by last name.</response>
     [HttpGet]
     [Authorize(Policy = TempHirePolicies.ReadStaffingData)]
     public IQueryable<StaffingResourceListItem> StaffingResourceListItems(string searchText = null)

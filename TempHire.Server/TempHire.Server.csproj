@@ -6,6 +6,10 @@
     <Nullable>disable</Nullable>
     <RootNamespace>TempHire.Server</RootNamespace>
     <UserSecretsId>f0a1f8fc-e269-4df9-a4af-e12a9d3befae</UserSecretsId>
+    <!-- The /// comments, for Swagger (see Swagger/SwaggerSetup.cs).  Not every member has one: no
+         warning for those (CS1591). -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -26,6 +30,8 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="11.0.1" />
+    <PackageReference Include="Swashbuckle.AspNetCore.Newtonsoft" Version="11.0.1" />
   </ItemGroup>
 
   <ItemGroup>

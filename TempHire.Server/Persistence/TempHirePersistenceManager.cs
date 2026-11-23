@@ -38,13 +38,15 @@ namespace TempHire.Server.Persistence;
 ///   </item>
 /// </list>
 /// <para>
-/// Saves are asynchronous (<see cref="SaveChangesAsync"/>): validation rules may be, and the rules
+/// Saves are asynchronous (<c>SaveChangesAsync</c>): validation rules may be, and the rules
 /// read the database.  Breeze's asynchronous save calls the synchronous hooks as well as the
 /// asynchronous ones, so the per-entity checks stay in <see cref="BeforeSaveEntity"/>, and the rest is
 /// in <see cref="BeforeSaveEntitiesAsync"/>.  The synchronous <see cref="SaveChanges"/> would skip it,
 /// so it refuses to run.
 /// </para>
 /// </summary>
+/// <param name="dbContext">The staffing data the save goes to.</param>
+/// <param name="principal">The signed-in user: their role decides whether they may save, and their name goes in the audit columns.</param>
 /// <param name="validation">
 /// Checks the validation metadata, data annotations included, on every save.
 /// </param>
@@ -149,7 +151,7 @@ public class TempHirePersistenceManager(
         return true;
     }
 
-    /// <summary>Not supported: a save must be asynchronous, see <see cref="SaveChangesAsync"/>.</summary>
+    /// <summary>Not supported: a save must be asynchronous, see <c>SaveChangesAsync</c>.</summary>
     public new SaveResult SaveChanges(JObject saveBundle, TransactionSettings transactionSettings = null) =>
         throw new NotSupportedException(
             "TempHire saves asynchronously, so that validation rules can be asynchronous: use SaveChangesAsync.");

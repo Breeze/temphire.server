@@ -195,7 +195,7 @@ public class AuthorizationController(
     /// The resources the token is for.  A client that names them (an MCP client must, with
     /// RFC 8707's <c>resource</c> parameter) gets those - OpenIddict has already checked that
     /// the client may have them.  Otherwise: the API and the MCP endpoint for TempHire's own app,
-    /// the MCP endpoint alone for any other client.
+    /// the API alone for Swagger UI, the MCP endpoint alone for any other client.
     /// </summary>
     private IEnumerable<string> Resources(OpenIddictRequest request, string clientId)
     {
@@ -206,9 +206,12 @@ public class AuthorizationController(
         }
 
         var origin = OAuthSettings.OriginOf(Request);
-        return clientId == OAuthSettings.SpaClientId
-            ? [OAuthSettings.ApiResource(origin), OAuthSettings.McpResource(origin)]
-            : [OAuthSettings.McpResource(origin)];
+        return clientId switch
+        {
+            OAuthSettings.SpaClientId => [OAuthSettings.ApiResource(origin), OAuthSettings.McpResource(origin)],
+            OAuthSettings.SwaggerClientId => [OAuthSettings.ApiResource(origin)],
+            _ => [OAuthSettings.McpResource(origin)]
+        };
     }
 
     /// <summary>"accept" or "deny" when the consent screen posted back, otherwise null.</summary>
