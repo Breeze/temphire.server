@@ -65,11 +65,6 @@ from the original Silverlight and WPF versions, and the client side.
 
 ## Running it
 
-The server's validation uses a preview of
-[IdeaBlade Validation](https://github.com/Breeze/ideablade-validation), which isn't published yet.
-Its package is in `packages/`, and `nuget.config` makes `dotnet` take it from there (see
-`packages/README.md`), so there is nothing extra to install.
-
 ```
 cd TempHire.Server
 dotnet run
@@ -690,11 +685,15 @@ whatever the sign-in.  What a provider adds:
 
 ## Validation
 
-> **Preview.**  Validation uses a preview of
-> [IdeaBlade Validation](https://github.com/Breeze/ideablade-validation) (`0.1.0-preview.10`),
-> which isn't published to NuGet or npm yet: the build is in `packages/`, where `nuget.config`
-> finds it (`packages/README.md` explains how to update it).  The framework's API may still change
-> before its first release, and so may its name.
+> Validation uses [IdeaBlade Validation](https://github.com/Breeze/ideablade-validation) 0.1.0,
+> the [`IdeaBlade.Validation`](https://www.nuget.org/packages/IdeaBlade.Validation) package on
+> NuGet.  As with any 0.x version, its API may still change between minor versions.
+>
+> `$schema` in `TempHire.Server/Validation/validation.metadata.json` points at the library's
+> schema on GitHub, pinned to the commit of the version the server uses (`v0.1.0`), so the editor
+> checks the rules the package runs; move it along with the package version.  (Not a relative
+> path into a client's `node_modules`: Visual Studio reports "Error loading schema" for it, and it
+> leads nowhere in a clone of this repository on its own.)
 
 The validation rules are written once, here, in two places:
 
@@ -853,9 +852,7 @@ provider, delete them and add a new initial migration (see [The database schema]
 ```
 temphire.server/
 ├── TempHire.sln
-├── nuget.config               # the local package source (packages/)
 ├── dotnet-tools.json          # dotnet-ef
-├── packages/                  # the IdeaBlade.Validation preview
 ├── Set-ClaudeApiKey.ps1       # stores the Claude API key in user secrets
 ├── TempHire.Model/            # POCO entities, DbContexts, sample data
 │   ├── Entities/              # ← DomainModel/, plus Tenant
