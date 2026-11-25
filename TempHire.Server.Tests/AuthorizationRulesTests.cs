@@ -110,6 +110,7 @@ public sealed class AuthorizationRulesTests
         ["Lookups.PhoneNumberTypes"] = SignedIn,
         ["Lookups.RateTypes"] = SignedIn,
         ["Lookups.States"] = SignedIn,
+        ["Agent.Answer"] = SignedIn,
         ["Agent.Info"] = SignedIn,
         ["Agent.Chat"] = SignedIn,
 

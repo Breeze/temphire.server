@@ -291,46 +291,36 @@ builder.Services.AddRateLimiter(options =>
 // access tokens issued for it (AudienceCheck), and answers a request without one with a 401 that
 // points the client at the resource metadata, from where an MCP client such as Claude Code finds
 // the authorization server, registers, and signs the user in.  Stateless: each request carries
-// everything, including the caller's token, and gets a fresh StaffingTools with that request's
-// tenant-filtered TempHireDbContext.
+// everything, including the caller's token, and gets fresh tool instances with that request's
+// tenant-filtered TempHireDbContext.  That holds for the address update too: when a tool asks the
+// user something (elicitation), it answers the call with the question, and the client calls again
+// with the answer (multi round-trip requests, the 2026-07-28 protocol revision).
 // ---------------------------------------------------------------------------------------------
+// Tool results reach the model as JSON text.  Relaxed escaping keeps them readable ("C++",
+// "Müller") instead of the default +, ü and " escapes, which cost tokens and
+// confuse small local models.
+var mcpToolJson = new System.Text.Json.JsonSerializerOptions(ModelContextProtocol.McpJsonUtilities.DefaultOptions)
+{
+    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+};
+
 builder.Services
     .AddMcpServer(options =>
     {
         options.ServerInfo = new() { Name = "TempHire", Version = "1.0.0" };
         options.ServerInstructions =
-            "Read-only staffing data of the signed-in user's company: staffing resources with their " +
-            "addresses, phone numbers, rates (US dollars), skills and work history.";
+            "Staffing data of the signed-in user's company: staffing resources with their " +
+            "addresses, phone numbers, rates (US dollars), skills and work history.  Read-only, except " +
+            "that an editor can change an existing address of a staffing resource, in three steps: " +
+            "choose_address_to_update, complete_address, update_staffing_resource_address.  The user " +
+            "picks and confirms in the client (elicitation); nothing changes without their confirmation.";
     })
     .WithHttpTransport(options => options.Stateless = true)
-    // Tool results reach the model as JSON text.  Relaxed escaping keeps them readable ("C++",
-    // "Müller") instead of the default +, ü and " escapes, which cost tokens and
-    // confuse small local models.
-    .WithTools<StaffingTools>(new System.Text.Json.JsonSerializerOptions(ModelContextProtocol.McpJsonUtilities.DefaultOptions)
-    {
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-    })
-    // Roles: the tools read the company's staffing data, so they need the Editor or Reader role, as
-    // the Breeze queries do.  A signed-in user with neither may still connect and list the tools -
-    // Quinn connects before every answer, and can still answer questions that need no data, such as
-    // the one about its name - but every tool call answers that the user has no access.  The model
-    // gets that as the tool's result and passes it on, rather than being left to guess.
-    .WithRequestFilters(filters => filters.AddCallToolFilter(next => async (context, cancellationToken) =>
-        TempHirePolicies.CanRead(context.User)
-            ? await next(context, cancellationToken)
-            : new ModelContextProtocol.Protocol.CallToolResult
-            {
-                IsError = true,
-                Content =
-                [
-                    new ModelContextProtocol.Protocol.TextContentBlock
-                    {
-                        Text = "Access denied: this user's account has no access to the company's staffing data " +
-                               "(it needs the Editor or Reader role). Tell the user they don't have access to " +
-                               "that data. Do not answer the question from other knowledge."
-                    }
-                ]
-            }));
+    .WithTools<StaffingTools>(mcpToolJson)
+    // The address update, for editors: see AddressUpdateTools.
+    .WithTools<AddressUpdateTools>(mcpToolJson)
+    // Who may use which tool: readers and editors read, only editors change an address.
+    .WithTempHireAccessRules();
 
 // ---------------------------------------------------------------------------------------------
 // Quinn, the agent - see AgentController.  Ollama or Claude, per the Agent section of appsettings.
@@ -338,6 +328,8 @@ builder.Services
 builder.Services.Configure<AgentOptions>(builder.Configuration.GetSection(AgentOptions.SectionName));
 builder.Services.AddSingleton<ChatClientFactory>();
 builder.Services.AddScoped<QuinnAgent>();
+// The questions tools ask the user through Quinn, waiting for an answer: see QuinnQuestions.
+builder.Services.AddSingleton<QuinnQuestions>();
 builder.Services.AddHttpClient(nameof(QuinnAgent));
 
 // Quinn's token quotas, per user and per company (Agent:Quotas), and the usage they are checked against.
@@ -464,7 +456,7 @@ app.UseAuthorization();
 app.MapControllers();
 
 // The MCP endpoint.  RequireAuthorization: no valid access token for the MCP endpoint, no tools
-// (401).  Any signed-in user may connect; the call-tool filter above checks the role for each call.
+// (401).  Any signed-in user may connect; McpAccessRules checks the role for each call.
 app.MapMcp("/mcp").RequireAuthorization();
 
 // Anything else is the client app - except the server's own paths, which answer 404 when nothing
@@ -487,3 +479,4 @@ if (app.Environment.IsDevelopment())
 app.MapFallbackToFile("index.html").AllowAnonymous();
 
 app.Run();
+

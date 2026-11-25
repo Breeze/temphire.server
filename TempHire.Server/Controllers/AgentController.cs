@@ -31,6 +31,7 @@ public class AgentController(
     QuinnAgent agent,
     ChatClientFactory chatClients,
     QuinnUsageStore usage,
+    QuinnQuestions questions,
     ILogger<AgentController> logger)
     : ControllerBase
 {
@@ -47,6 +48,7 @@ public class AgentController(
     private readonly QuinnAgent _agent = agent;
     private readonly ChatClientFactory _chatClients = chatClients;
     private readonly QuinnUsageStore _usage = usage;
+    private readonly QuinnQuestions _questions = questions;
     private readonly ILogger<AgentController> _logger = logger;
 
     /// <summary>Who answers: Quinn's name, the model and the user's company.</summary>
@@ -85,7 +87,10 @@ public class AgentController(
     /// <response code="200">
     /// The answer, streamed: one JSON object per line, <c>{"type": "text", "content": "..."}</c>,
     /// <c>{"type": "people", "people": [{"name": "...", "id": "..."}]}</c> (replacing any earlier
-    /// list), <c>{"type": "done"}</c> when the answer is complete, or
+    /// list), a question for the user, <c>{"type": "input", "id": "...", "content": "...",
+    /// "choices": [{"value": "...", "label": "..."}]}</c> (no choices: a confirmation), to answer at
+    /// <c>api/agent/answer</c>, <c>{"type": "inputClosed", "id": "..."}</c> when it can no longer be
+    /// answered, <c>{"type": "done"}</c> when the answer is complete, or
     /// <c>{"type": "error", "content": "..."}</c> if it fails part-way.
     /// </response>
     /// <response code="400">No question: the conversation is empty or doesn't end with the user's message.</response>
@@ -135,9 +140,11 @@ public class AgentController(
                 conversation,
                 new Uri($"{Request.Scheme}://{Request.Host}/mcp"),
                 AccessToken,
+                caller.UserId,
                 CompanyName,
                 User.Identity?.Name ?? "a TempHire user",
                 TempHirePolicies.CanRead(User),
+                TempHirePolicies.CanEdit(User),
                 tokens,
                 cancellationToken)
             .GetAsyncEnumerator(cancellationToken);
@@ -176,6 +183,33 @@ public class AgentController(
             await updates.DisposeAsync();
             await RecordAsync(caller, model, now, tokens);
         }
+    }
+
+    /// <summary>Answers a question Quinn's answer is waiting on: a choice, or a confirmation.</summary>
+    /// <remarks>
+    /// While Quinn answers, a tool may ask the user something - which address to change, which of
+    /// several matches is right, whether to save the change - and the answer stream pauses on an
+    /// <c>input</c> line until the user answers here.  The answer goes to the tool, not to the
+    /// model.  Only the user the question was asked of can answer it, once, with one of the
+    /// choices it offered; a question not answered within 10 minutes counts as cancelled.
+    /// </remarks>
+    /// <param name="request">The question's id, and the answer.</param>
+    /// <response code="200">The answer is on its way to the tool.</response>
+    /// <response code="404">No such question for this user: answered already, timed out, or not a choice it offered.</response>
+    [HttpPost]
+    [Consumes("application/json")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResult), StatusCodes.Status404NotFound, "application/json")]
+    public IActionResult Answer([FromBody] AnswerRequest request)
+    {
+        if (UsageCaller.From(User) is not { } caller)
+        {
+            return Forbid();
+        }
+
+        return _questions.Answer(request?.Id, caller.UserId, request?.Accept == true, request?.Choice)
+            ? Ok()
+            : NotFound(new ErrorResult { Message = "That question can no longer be answered." });
     }
 
     /// <summary>
@@ -268,6 +302,20 @@ public class ChatRequestMessage
 
     /// <summary>The message, in Markdown.</summary>
     public string Content { get; set; }
+}
+
+/// <summary>The user's answer to a question Quinn is waiting on.</summary>
+[JsonObject(NamingStrategyType = typeof(CamelCaseNamingStrategy))]
+public class AnswerRequest
+{
+    /// <summary>The question's id, from its <c>input</c> line.</summary>
+    public string Id { get; set; }
+
+    /// <summary>True for OK or Confirm, false for Cancel.</summary>
+    public bool Accept { get; set; }
+
+    /// <summary>The value of the chosen option, for a choice; left out for a confirmation.</summary>
+    public string Choice { get; set; }
 }
 
 [JsonObject(NamingStrategyType = typeof(CamelCaseNamingStrategy))]
