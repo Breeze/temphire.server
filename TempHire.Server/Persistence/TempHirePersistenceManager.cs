@@ -231,16 +231,33 @@ public class TempHirePersistenceManager(
     /// </summary>
     private async Task ValidateSaveAsync(Dictionary<Type, List<EntityInfo>> saveMap, CancellationToken cancellationToken)
     {
-        var store = await SaveValidationStore.CreateAsync(Context, saveMap, cancellationToken);
-        var errors = (await _validation.ValidateEntitiesAsync(store, cancellationToken: cancellationToken))
-            .SelectMany(ToEntityErrors)
-            .ToList();
+        var errors = await ValidationErrorsAsync(saveMap, cancellationToken);
 
         if (errors.Count > 0)
         {
             throw new EntityErrorsException(
                 string.Join("\n", errors.Select(e => e.ErrorMessage).Distinct()), errors);
         }
+    }
+
+    /// <summary>
+    /// The errors a save of <paramref name="entity"/> in <paramref name="state"/> would fail with,
+    /// without saving it: the same check <see cref="ValidateSaveAsync"/> makes on every save, against
+    /// the database as it would be after it.  For code that changes data outside a Breeze save
+    /// bundle and must check it before it asks the user to confirm, such as Quinn's address update
+    /// (<c>Mcp/AddressUpdateTools</c>).  The save that follows still checks it again.
+    /// </summary>
+    public Task<IReadOnlyList<EntityError>> ValidateAsync(object entity, EntityState state, CancellationToken cancellationToken)
+    {
+        var saveMap = new Dictionary<Type, List<EntityInfo>> { [entity.GetType()] = [CreateEntityInfo(entity, state)] };
+        return ValidationErrorsAsync(saveMap, cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<EntityError>> ValidationErrorsAsync(
+        Dictionary<Type, List<EntityInfo>> saveMap, CancellationToken cancellationToken)
+    {
+        var store = await SaveValidationStore.CreateAsync(Context, saveMap, cancellationToken);
+        return [.. (await _validation.ValidateEntitiesAsync(store, cancellationToken: cancellationToken)).SelectMany(ToEntityErrors)];
     }
 
     /// <summary>

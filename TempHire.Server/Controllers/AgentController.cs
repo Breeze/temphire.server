@@ -31,6 +31,7 @@ public class AgentController(
     QuinnAgent agent,
     ChatClientFactory chatClients,
     QuinnUsageStore usage,
+    QuinnQuestions questions,
     ILogger<AgentController> logger)
     : ControllerBase
 {
@@ -47,6 +48,7 @@ public class AgentController(
     private readonly QuinnAgent _agent = agent;
     private readonly ChatClientFactory _chatClients = chatClients;
     private readonly QuinnUsageStore _usage = usage;
+    private readonly QuinnQuestions _questions = questions;
     private readonly ILogger<AgentController> _logger = logger;
 
     /// <summary>Who answers: Quinn's name, the model and the user's company.</summary>
@@ -85,7 +87,13 @@ public class AgentController(
     /// <response code="200">
     /// The answer, streamed: one JSON object per line, <c>{"type": "text", "content": "..."}</c>,
     /// <c>{"type": "people", "people": [{"name": "...", "id": "..."}]}</c> (replacing any earlier
-    /// list), <c>{"type": "done"}</c> when the answer is complete, or
+    /// list), a question for the user, <c>{"type": "input", "id": "...", "content": "...",
+    /// "choices": [{"value": "...", "label": "..."}]}</c> (no choices: a confirmation), to answer at
+    /// <c>api/agent/answer</c>, <c>{"type": "inputClosed", "id": "..."}</c> when it can no longer be
+    /// answered, <c>{"type": "saved", "changes": [{"entityType": "Address", "id": "...",
+    /// "staffingResourceId": "...", "summary": "..."}]}</c> when a tool has saved a change (refresh
+    /// what shows it, and send the summaries back with the answer, as its <c>saved</c>),
+    /// <c>{"type": "done"}</c> when the answer is complete, or
     /// <c>{"type": "error", "content": "..."}</c> if it fails part-way.
     /// </response>
     /// <response code="400">No question: the conversation is empty or doesn't end with the user's message.</response>
@@ -120,9 +128,9 @@ public class AgentController(
         var conversation = (request?.Messages ?? [])
             .Where(m => !string.IsNullOrWhiteSpace(m?.Content))
             .TakeLast(MaxMessages)
-            .Select(m => new ChatMessage(
-                m.Role == "assistant" ? ChatRole.Assistant : ChatRole.User,
-                m.Content.Length > MaxMessageLength ? m.Content[..MaxMessageLength] : m.Content))
+            .Select(m => m.Role == "assistant"
+                ? new ChatMessage(ChatRole.Assistant, WithSaved(m))
+                : new ChatMessage(ChatRole.User, Cut(m.Content)))
             .ToList();
 
         if (conversation.Count == 0 || conversation[^1].Role != ChatRole.User)
@@ -135,9 +143,11 @@ public class AgentController(
                 conversation,
                 new Uri($"{Request.Scheme}://{Request.Host}/mcp"),
                 AccessToken,
+                caller.UserId,
                 CompanyName,
                 User.Identity?.Name ?? "a TempHire user",
                 TempHirePolicies.CanRead(User),
+                TempHirePolicies.CanEdit(User),
                 tokens,
                 cancellationToken)
             .GetAsyncEnumerator(cancellationToken);
@@ -178,6 +188,33 @@ public class AgentController(
         }
     }
 
+    /// <summary>Answers a question Quinn's answer is waiting on: a choice, or a confirmation.</summary>
+    /// <remarks>
+    /// While Quinn answers, a tool may ask the user something - which address to change, which of
+    /// several matches is right, whether to save the change - and the answer stream pauses on an
+    /// <c>input</c> line until the user answers here.  The answer goes to the tool, not to the
+    /// model.  Only the user the question was asked of can answer it, once, with one of the
+    /// choices it offered; a question not answered within 10 minutes counts as cancelled.
+    /// </remarks>
+    /// <param name="request">The question's id, and the answer.</param>
+    /// <response code="200">The answer is on its way to the tool.</response>
+    /// <response code="404">No such question for this user: answered already, timed out, or not a choice it offered.</response>
+    [HttpPost]
+    [Consumes("application/json")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResult), StatusCodes.Status404NotFound, "application/json")]
+    public IActionResult Answer([FromBody] AnswerRequest request)
+    {
+        if (UsageCaller.From(User) is not { } caller)
+        {
+            return Forbid();
+        }
+
+        return _questions.Answer(request?.Id, caller.UserId, request?.Accept == true, request?.Choice)
+            ? Ok()
+            : NotFound(new ErrorResult { Message = "That question can no longer be answered." });
+    }
+
     /// <summary>
     /// Adds the question's tokens to the user's usage of the model.  Not cancellable: the request
     /// may already be cancelled (the user closed the pane), but the tokens were used.  A failure
@@ -206,6 +243,23 @@ public class AgentController(
         {
             _logger.LogError(e, "Quinn's token usage could not be recorded.");
         }
+    }
+
+    private static string Cut(string text) => text.Length > MaxMessageLength ? text[..MaxMessageLength] : text;
+
+    /// <summary>
+    /// An earlier answer, with what its tools saved in front of it.  The conversation comes back
+    /// without the tool calls of earlier answers, so without this the model sees an answer that
+    /// says it changed something and no change behind it, and takes it back (see
+    /// <c>ToolResultChanges</c>).  The note is what the stream reported as saved, which the client
+    /// kept with the answer; Quinn's system prompt says what it means.
+    /// </summary>
+    private static string WithSaved(ChatRequestMessage message)
+    {
+        var saved = (message.Saved ?? []).Where(s => !string.IsNullOrWhiteSpace(s)).Take(5).Select(s => Cut(s.Trim())).ToList();
+        return saved.Count == 0
+            ? Cut(message.Content)
+            : $"[Saved in this answer: {string.Join(" ", saved)}]\n\n{Cut(message.Content)}";
     }
 
     /// <summary>The provider and model a question is answered with.</summary>
@@ -268,6 +322,26 @@ public class ChatRequestMessage
 
     /// <summary>The message, in Markdown.</summary>
     public string Content { get; set; }
+
+    /// <summary>
+    /// For an answer: what its tools saved, as the stream's <c>saved</c> line summarized it.  Sent
+    /// back so the model knows, since the tool calls themselves are not.
+    /// </summary>
+    public List<string> Saved { get; set; }
+}
+
+/// <summary>The user's answer to a question Quinn is waiting on.</summary>
+[JsonObject(NamingStrategyType = typeof(CamelCaseNamingStrategy))]
+public class AnswerRequest
+{
+    /// <summary>The question's id, from its <c>input</c> line.</summary>
+    public string Id { get; set; }
+
+    /// <summary>True for OK or Confirm, false for Cancel.</summary>
+    public bool Accept { get; set; }
+
+    /// <summary>The value of the chosen option, for a choice; left out for a confirmation.</summary>
+    public string Choice { get; set; }
 }
 
 [JsonObject(NamingStrategyType = typeof(CamelCaseNamingStrategy))]

@@ -157,7 +157,7 @@ this repository, push it, and then commit the submodule's new commit in the clie
 dotnet test
 ```
 
-`TempHire.Server.Tests` has over 60 tests, most against an in-memory SQLite database, so they run
+`TempHire.Server.Tests` has over 80 tests, most against an in-memory SQLite database, so they run
 real SQL and need no SQL Server:
 
 | Tests | What they cover |
@@ -167,6 +167,9 @@ real SQL and need no SQL Server:
 | `SampleDataTests` | All the sample data passes every rule the server checks on a save, with a positive control |
 | `ResourceQueryTests` | The staffing resource queries return what the client asks for, and load related collections with one SQL query each (the client's load and Quinn's) |
 | `AuthorizationRulesTests` | Every controller action declares who may call it, and the save and Quinn's tools check the same roles as the policies |
+| `AddressUpdateToolsTests` | Changing an address through the MCP tools, with an MCP client over HTTP and a stand-in for the user: which address, completing the new one (the house number and ZIP code Photon lacks), and the save only after the user confirms, through the save interceptor; another resource's or company's address, a change that breaks the rules, a reader, and an answer the tool never asked for change nothing |
+| `ToolResultChangesTests` | What the tools of an answer saved, read from their results for the client to refresh and to keep with the answer, and only what a result reports under `changed` |
+| `QuinnQuestionsTests` | The questions Quinn's answer waits on: only the user asked can answer, once, with one of the choices offered; a question whose answer stream ends is cancelled |
 | `QuinnUsageTests` | Quinn's budgets: days, weeks and months in UTC, which rule applies, what tokens cost (cache reads and writes included), and which budget stops a user and until when |
 | `BreezeQueryLimitsTests` | The query limits over HTTP, through the real filter pipeline: the 1000-row cap, how deep each endpoint may expand or select, that no `[BreezeQueryFilter]` attribute leaves a limit out, and rows in key order unless the client's `orderBy` replaces it |
 | `SwaggerDocumentTests` | The Swagger description, generated as the server generates it: only the API, every endpoint with a summary and described responses, 401 and the role policies' 403, and Json.NET's property names |
@@ -193,6 +196,7 @@ client ──POST /api/agent/chat──► AgentController ──► QuinnAgent 
  (pane)  (access token)                                 │                  │ tool calls
                                                         └── MCP client ────┴──► /mcp (MCP server)
                                                           (user's token)          StaffingTools ──► EF Core
+                                                                                  AddressUpdateTools (editors)
 ```
 
 - **The client** only shows the conversation.  It sends the conversation so far to
@@ -212,7 +216,9 @@ client ──POST /api/agent/chat──► AgentController ──► QuinnAgent 
   `RequireAuthorization()`.  Its tools in `StaffingTools` are read-only: search people by name,
   skill or location, one person's details, skills, rate statistics, counts by location, and work
   history.  They query with **EF Core LINQ, not SQL**, through the same `TempHireDbContext` as
-  Breeze, so the tenant filter applies to them as to everything else.
+  Breeze, so the tenant filter applies to them as to everything else.  The tools in
+  `AddressUpdateTools` let an editor change an existing address, and nothing else; see
+  [Changing an address through Quinn](#changing-an-address-through-quinn).
 - **The agent calls the MCP server as the user.**  `QuinnAgent` connects to `/mcp` over HTTP with
   the signed-in user's own access token, so the tools run with that user's identity and company.
   Nothing in the agent can reach another company's data, whatever the model asks for.  The app's
@@ -229,6 +235,72 @@ client ──POST /api/agent/chat──► AgentController ──► QuinnAgent 
   out.  The client turns those names in the answer into links to the person's record, so only
   people the tools really returned are linked, and always to the right record; a name the model
   gets wrong, or invents, stays plain text.
+
+### Changing an address through Quinn
+
+An experiment in letting Quinn change data, safely: an **editor** can ask Quinn to change an
+existing address of a staffing resource (*Change Ann Lee's home address to 908 W Capital Way,
+Tacoma*).  Nothing else can change: no new address, no other property, no other data.
+
+1. **Which address.**  `choose_address_to_update` takes the person and the address type, if the
+   user named one.  If they named none and the person has several addresses, or named one the
+   person doesn't have, the chat pane shows the addresses as radio buttons, with OK and Cancel.
+2. **The new address, completed.**  `complete_address` asks [Photon](#address-completion) for it.
+   Photon's U.S. house numbers have gaps, so a match that is only the street gets the house number
+   the user typed, and a match without a ZIP code the user's ZIP code.  Several matches: the pane
+   shows them as radio buttons, with OK and Cancel; after Cancel, Quinn asks for a corrected address
+   and tries again.
+3. **Check, confirm, save.**  `update_staffing_resource_address` checks the change, then the pane
+   shows whose address changes, the current address and the new one, with Confirm and Cancel.  Only
+   Confirm saves it.
+
+**The user answers, not the model.**  The choices and the confirmation are
+[MCP elicitations](https://modelcontextprotocol.io/specification/2025-11-25/client/elicitation):
+the tool asks the user, through the MCP client, in the middle of its call.  The model only sees the
+tool's result, so it can't pick or confirm for the user, and neither can text in the data that it
+reads.  The MCP server is stateless, so a question travels as a multi round-trip request
+(SEP-2322, in the `2026-07-28` protocol revision): the tool answers its first call with the question and a
+request state, and the client calls again with the user's answer.  The request state is the
+question's fingerprint, protected with ASP.NET Core Data Protection for that user for 15 minutes
+(`Mcp/UserInput.cs`), so an answer counts only for the question it was given to: a client can't
+answer a question it was never asked, and an answer to an address that has changed since is asked
+again.  An MCP client without multi round-trip requests gets a refusal.
+
+**How the question reaches the user.**  `QuinnAgent` is the MCP client.  Its elicitation handler
+puts the question in the answer stream (an `input` line with the question and its choices), and
+waits for the user's click, which the client posts to `api/agent/answer`; `QuinnQuestions` holds
+the waiting question until then, for that user only, for up to 10 minutes.  Unanswered, it counts
+as cancelled.  Claude Code and other MCP clients that support elicitation ask the user in their own
+way.
+
+**What the update checks, whatever the model passes** (`AddressUpdateTools`):
+
+- **An editor.**  `McpAccessRules` leaves the three tools out of the tool list for anyone else, so
+  the model isn't offered them, and refuses their calls; the tools check the role again.
+- **The right company.**  The staffing resource and the address belong to the user's tenant: the
+  query filter already sees to that, and the tools check the rows' tenant as well.
+- **The right person.**  The address's `StaffingResourceId` is the staffing resource's id.
+- **Only an existing address, and only its street, city, state and ZIP code.**
+- **The validation rules, explicitly, before the user confirms**: the same check the save
+  interceptor makes (`TempHirePersistenceManager.ValidateAsync`), so the user is never asked to
+  confirm a change that can't be saved.
+
+**Saved through the save interceptor.**  The change is saved as a Breeze save bundle that the tool
+builds, through `TempHirePersistenceManager`, so everything a client save goes through applies:
+the editor check, the entity-type check, the audit columns, the row version, the validation again,
+and the tenant check on the write.  An address someone else changed since it was read is a
+conflict, and nothing is saved.
+
+**After the change.**  The tool's result lists what it saved (`changed`), and `QuinnAgent` passes
+that on in the answer stream as a `saved` line (`ToolResultChanges`), taken from the tool result,
+never from the model.  The clients announce it as a save: the search list reloads, and Resource
+Management reloads the resource it shows.  A user who is editing that resource with unsaved changes
+is asked whether to discard them; if not, the rest of the record is refreshed and their changes
+stay, ready to save.  Each change also has a one-line summary, which the client keeps with the
+answer and sends back with the conversation; `AgentController` puts it in front of that answer
+(`[Saved in this answer: ...]`).  The conversation comes back without the tool calls of earlier
+answers, and without the summary Quinn, seeing an answer that said it had changed an address and
+no update behind it, took the change back on the next question.
 
 ### Ollama or Claude
 
@@ -617,11 +689,11 @@ origin in `AllowedClientOrigins` for CORS.
 
 Two Identity roles, `TempHireRoles`:
 
-| | Home | Resource Management | Add, edit, delete | Quinn's answers about the data |
-|---|---|---|---|---|
-| **Editor** | yes | yes | yes | yes |
-| **Reader** | yes | yes, read-only | no | yes |
-| no role | yes | no | no | no |
+| | Home | Resource Management | Add, edit, delete | Quinn's answers about the data | Change an address through Quinn |
+|---|---|---|---|---|---|
+| **Editor** | yes | yes | yes | yes | yes |
+| **Reader** | yes | yes, read-only | no | yes | no |
+| no role | yes | no | no | no | no |
 
 - **The server enforces them, endpoint by endpoint.**  The roles are signed into the token, and
   every endpoint declares who may call it, through the policies in `TempHirePolicies`:
@@ -630,8 +702,8 @@ Two Identity roles, `TempHireRoles`:
   |---|---|
   | Anyone | The sign-in page, `connect/authorize`, `connect/token`, `connect/logout`, `connect/register`, the metadata under `.well-known`, the client app's own files |
   | Any signed-in user | `api/account/me`; the Breeze metadata (`api/model`) and the shared lookups (`api/lookups`), which the client loads at sign-in; the validation metadata; Quinn's `api/agent/*`; connecting to `/mcp` |
-  | Editor or Reader (`ReadStaffingData`) | The Resource Management workspace's queries (`api/resourcemgt`): `StaffingResources`, `StaffingResourceListItems` and the child collections; MCP tool calls |
-  | Editor (`EditStaffingData`) | `api/resourcemgt/SaveChanges` |
+  | Editor or Reader (`ReadStaffingData`) | The Resource Management workspace's queries (`api/resourcemgt`): `StaffingResources`, `StaffingResourceListItems` and the child collections; the MCP tools that read |
+  | Editor (`EditStaffingData`) | `api/resourcemgt/SaveChanges`; `api/address/suggest`; the MCP address update tools |
 
   Anyone else gets `401` (not signed in) or `403 Forbidden` (signed in, wrong role).
 - **Deny by default.**  A fallback policy requires a signed-in user for any endpoint that doesn't
@@ -639,17 +711,18 @@ Two Identity roles, `TempHireRoles`:
   sign-in says `[AllowAnonymous]`.  `AuthorizationRulesTests` lists every controller action with
   its rule, so a new endpoint fails the tests until someone decides who may call it.
 - **Checked twice where it matters.**  The save interceptor (`TempHirePersistenceManager`) refuses
-  a save by anyone but an editor again, and the MCP server's call-tool filter refuses a tool call
-  by a user with neither role.  They use the same `TempHirePolicies.CanEdit` and `CanRead` as the
+  a save by anyone but an editor again, and the MCP server's filters (`McpAccessRules`) refuse a
+  tool call by a user with neither role, and an address update by anyone but an editor.  They use the same `TempHirePolicies.CanEdit` and `CanRead` as the
   policies, so the rules live in one place.
 - **The clients follow them**, from the roles `api/account/me` returns: they keep Resource
   Management to editors and readers, and leave out what a reader may not do.  None of that is
   security; it only keeps a client from offering what the server refuses.
-- **Quinn follows them too.**  Its tools only read, so an editor and a reader get the same answers.
-  A user with neither role can still chat with Quinn, about its name for instance, but every tool
-  call answers "Access denied" (a call-tool filter on the MCP server, in `Program.cs`), and Quinn's
-  system prompt says the user has no access, so it tells them so rather than guessing.  The filter
-  applies to any MCP client, not only Quinn.
+- **Quinn follows them too.**  An editor and a reader get the same answers; only an editor is
+  offered the tools that change an address, and Quinn's system prompt tells a reader that their
+  account can only read.  A user with neither role can still chat with Quinn, about its name for
+  instance, but every tool call answers "Access denied" (`McpAccessRules`, the MCP server's
+  filters), and Quinn's system prompt says the user has no access, so it tells them so rather than
+  guessing.  The filters apply to any MCP client, not only Quinn.
 - **A role change takes effect at the next token refresh**, within 30 minutes, when `TokenClaims`
   reads the roles again.
 
@@ -789,7 +862,8 @@ Photon's state names to TempHire's states.
   caches each answer for ten minutes, and gives up after three seconds; the clients wait for a
   pause in the typing.  A failure gives no suggestions, and the user goes on typing.
 - **OpenStreetMap's coverage.**  Its U.S. house numbers have gaps, so some addresses come back as a
-  street only, and the user adds the number.  A suggestion fills the form; the address rules (a
+  street only, and the user adds the number.  (Quinn's `complete_address` adds the number the user
+  typed itself; see [Changing an address through Quinn](#changing-an-address-through-quinn).)  A suggestion fills the form; the address rules (a
   U.S. state, a ZIP code) still check what it filled.
 - **The credit.**  OpenStreetMap's licence asks for "© OpenStreetMap contributors" wherever its data
   is shown: the endpoint returns it, and the clients show it under the suggestions.
@@ -932,6 +1006,11 @@ file carries a doc comment naming the file it came from.
   the prices, and prices must be updated by hand when the provider changes them; see
   [Budgets: usage and quotas](#budgets-usage-and-quotas).  Budgets start over at midnight UTC, not in
   the company's time zone, and a budget can be overrun by the questions under way when it runs out.
+- **Quinn's questions wait in one server's memory.**  While a tool waits for the user's answer
+  (an address to pick, a change to confirm), the question is held by the server instance that is
+  streaming Quinn's answer (`QuinnQuestions`), and the answer must reach that instance.  TempHire
+  runs one; several behind a load balancer would need session affinity for `api/agent`, or a
+  shared store.  The MCP tools themselves keep nothing between calls.
 - **Search has no paging.** `StaffingResourceListItems` returns every match, exactly as
   `StaffingResourceSearchService.Simple` did, up to the 1000-row cap
   ([Query limits](#query-limits)); a search with more matches shows the first 1000 by last name,
