@@ -118,7 +118,7 @@ public sealed class SaveFixture : IDisposable
         new()
         {
             Id = Guid.NewGuid(), StaffingResourceId = resourceId, PhoneNumberTypeId = PhoneNumberTypeId,
-            AreaCode = "206", Number = "555-1234", TenantId = Tenant,
+            Number = "(206) 555-1234", TenantId = Tenant,
         };
 
     /// <summary>A resource with an address and a phone number, stored: one that passes every rule.</summary>

@@ -77,7 +77,7 @@ public class StaffingTools(TempHireDbContext db)
                 city = r.Addresses.Where(a => a.Primary).Select(a => a.City).FirstOrDefault(),
                 state = r.Addresses.Where(a => a.Primary).Select(a => a.State.ShortName).FirstOrDefault(),
                 phone = r.PhoneNumbers.Where(p => p.Primary)
-                    .Select(p => "(" + p.AreaCode + ") " + p.Number).FirstOrDefault(),
+                    .Select(p => p.Number).FirstOrDefault(),
                 skills = r.Skills.OrderBy(s => s.Description).Select(s => s.Description).ToList(),
                 hourlyRate = r.Rates.Where(x => x.RateType.Name == "hourly").Select(x => (decimal?)x.Amount).FirstOrDefault()
             })
@@ -143,7 +143,7 @@ public class StaffingTools(TempHireDbContext db)
                 phoneNumbers = r.PhoneNumbers.OrderByDescending(p => p.Primary).Select(p => new
                 {
                     type = p.PhoneNumberType.Name,
-                    number = "(" + p.AreaCode + ") " + p.Number,
+                    number = p.Number,
                     primary = p.Primary
                 }),
                 rates = r.Rates.OrderBy(x => x.RateType.Sequence).Select(x => new { type = x.RateType.DisplayName, amountUsd = x.Amount }),

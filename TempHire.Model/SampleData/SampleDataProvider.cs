@@ -555,8 +555,7 @@ public partial class SampleDataProvider
         {
             Id = CreateGuid(_phoneId++),
             PhoneNumberTypeId = type.Id,
-            AreaCode = areaCode,
-            Number = phone,
+            Number = $"({areaCode}) {phone}",
             StaffingResourceId = resid,
             Primary = primary,
             Created = SeedTime,
