@@ -694,11 +694,12 @@ The validation rules are written once, here, in two places:
   the Breeze metadata as validators;
 - **the validation metadata**, `TempHire.Server/Validation/validation.metadata.json`, for the rules
   annotations cannot express: an address is a U.S. address, with a state and a ZIP code; a phone
-  number has a 3-digit area code and a 7-digit number (a dash or a dot may follow the first 3
-  digits); a rate is a valid amount and not negative; dates are valid dates; a date of birth is
-  neither in the future nor more than 123 years ago (the longest documented life is 122); and a
-  staffing resource has at least one address and one phone number, and it is at least 18 years old
-  when hired.
+  number is a U.S. number, in one field, written in any of the common ways - 10 digits, dashes,
+  dots or spaces between its parts, the area code in parentheses, a leading 1 or +1 - and the
+  clients rewrite a valid one as `(206) 555-1234` when the user leaves the field; a rate is a
+  valid amount and not negative; dates are valid dates; a date of birth is neither in the future
+  nor more than 123 years ago (the longest documented life is 122); and a staffing resource has at
+  least one address and one phone number, and it is at least 18 years old when hired.
 
 The sample data a new database is seeded with passes all of them: `SampleDataTests` validates
 every seeded row with the server's own rules, so a new rule that the sample data would break fails

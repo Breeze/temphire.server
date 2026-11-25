@@ -192,9 +192,7 @@ public class ResourceMgtController(TempHireDbContext dbContext, ValidationServic
                     a.Zipcode.Contains(text) ||
                     a.State.Name.Contains(text) ||
                     a.State.ShortName.Contains(text))) ||
-                x.PhoneNumbers.Any(p => p.Primary && (
-                    p.AreaCode.Contains(text) ||
-                    p.Number.Contains(text))));
+                x.PhoneNumbers.Any(p => p.Primary && p.Number.Contains(text)));
         }
 
         return query
@@ -220,9 +218,7 @@ public class ResourceMgtController(TempHireDbContext dbContext, ValidationServic
                 City = x.PrimaryAddress.City,
                 State = x.PrimaryAddress.State.ShortName,
                 Zipcode = x.PrimaryAddress.Zipcode,
-                AreaCode = x.PrimaryPhone.AreaCode,
-                Number = x.PrimaryPhone.Number,
-                PhoneNumber = "(" + x.PrimaryPhone.AreaCode + ") " + x.PrimaryPhone.Number
+                PhoneNumber = x.PrimaryPhone.Number
             });
     }
 }

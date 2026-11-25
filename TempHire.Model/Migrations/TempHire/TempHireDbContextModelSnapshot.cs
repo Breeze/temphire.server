@@ -120,11 +120,6 @@ namespace TempHire.Model.Migrations.TempHire
                     b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("AreaCode")
-                        .IsRequired()
-                        .HasMaxLength(3)
-                        .HasColumnType("nvarchar(3)");
-
                     b.Property<DateTime>("Created")
                         .HasColumnType("datetime2");
 
@@ -141,8 +136,8 @@ namespace TempHire.Model.Migrations.TempHire
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasMaxLength(8)
-                        .HasColumnType("nvarchar(8)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<Guid>("PhoneNumberTypeId")
                         .HasColumnType("uniqueidentifier");

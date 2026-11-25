@@ -136,6 +136,57 @@ public sealed class SaveRulesTests : IDisposable
         Assert.NotNull(_db.Load<StaffingResource>(plausible.Id));
     }
 
+    /// <summary>
+    /// The phone number format, as the server runs it (.NET's regex): the same cases as the
+    /// clients' tests and the editor project's examples, which run it in JavaScript.
+    /// </summary>
+    [Theory]
+    [InlineData("2065551234")]
+    [InlineData("206-555-1234")]
+    [InlineData("206.555.1234")]
+    [InlineData("206 555 1234")]
+    [InlineData("(206) 555-1234")]
+    [InlineData("(206)555-1234")]
+    [InlineData("12065551234")]
+    [InlineData("+12065551234")]
+    [InlineData("1-206-555-1234")]
+    [InlineData("1.206.555.1234")]
+    [InlineData("+1 206 555 1234")]
+    [InlineData("+1 (206) 555-1234")]
+    public async Task ACommonPhoneNumberFormatIsAccepted(string number)
+    {
+        var (resource, _, _) = _db.StoreValidResource();
+        var phone = SaveFixture.Phone(resource.Id);
+        phone.Number = number;
+
+        await _db.SaveAsync(new SaveBundle().Add(phone).Build());
+
+        Assert.Equal(number, _db.Load<PhoneNumber>(phone.Id).Number);
+    }
+
+    [Theory]
+    [InlineData("555-1234")]
+    [InlineData("206-555-123")]
+    [InlineData("206-555-12345")]
+    [InlineData("22065551234")]
+    [InlineData("206-555.1234")]
+    [InlineData("(206 555-1234")]
+    [InlineData("(206) 555 1234")]
+    [InlineData("206-555-1234 x12")]
+    [InlineData(" 206-555-1234")]
+    public async Task AnyOtherPhoneNumberIsRefused(string number)
+    {
+        var (resource, _, _) = _db.StoreValidResource();
+        var phone = SaveFixture.Phone(resource.Id);
+        phone.Number = number;
+
+        var errors = await Assert.ThrowsAsync<EntityErrorsException>(() => _db.SaveAsync(new SaveBundle().Add(phone).Build()));
+
+        var error = Assert.Single(errors.EntityErrors);
+        Assert.Equal(("PHONE_NUMBER_FORMAT", "Number"), (error.ErrorName, error.PropertyName));
+        Assert.Null(_db.Load<PhoneNumber>(phone.Id));
+    }
+
     [Fact]
     public async Task ARuleBrokenByTwoUsersTogetherIsCaught()
     {
