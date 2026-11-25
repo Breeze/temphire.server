@@ -122,8 +122,9 @@ public sealed class AuthorizationRulesTests
         ["ResourceMgt.Skills"] = TempHirePolicies.ReadStaffingData,
         ["ResourceMgt.WorkExperienceItems"] = TempHirePolicies.ReadStaffingData,
 
-        // Editor: saving.
+        // Editor: saving, and the address suggestions for the address form.
         ["ResourceMgt.SaveChanges"] = TempHirePolicies.EditStaffingData,
+        ["Address.Suggest"] = TempHirePolicies.EditStaffingData,
     };
 
     [Fact]

@@ -43,6 +43,7 @@ from the original Silverlight and WPF versions, and the client side.
 - [Validation](#validation)
   - [Validating the database as it will be after the save](#validating-the-database-as-it-will-be-after-the-save)
   - [Concurrency](#concurrency)
+- [Address completion](#address-completion)
 - [The database schema](#the-database-schema)
 - [Using a different database](#using-a-different-database)
 - [Configuration](#configuration)
@@ -772,6 +773,33 @@ constraint, or a serializable transaction around validating and writing.
 
 ---
 
+## Address completion
+
+As an editor types the first line of an address, the clients suggest U.S. addresses that start that
+way, and picking one fills in the street, city, state and ZIP code.  They ask the server
+(`GET api/address/suggest?q=...`, editors only), which asks
+[Photon](https://github.com/komoot/photon), a geocoder over OpenStreetMap data, and matches
+Photon's state names to TempHire's states.
+
+- **No API key.**  The default is komoot's public Photon server (`AddressSuggestions:BaseUrl`).
+  Its maintainers welcome use within a reasonable limit and call it a demo and test service with
+  no availability guarantee, which suits TempHire.  For more than that, run Photon yourself
+  (GraphHopper publishes weekly data dumps) and point `BaseUrl` at it, or use a keyed service.
+- **Gentle on the public server.**  The server asks only for text of three characters or more,
+  caches each answer for ten minutes, and gives up after three seconds; the clients wait for a
+  pause in the typing.  A failure gives no suggestions, and the user goes on typing.
+- **OpenStreetMap's coverage.**  Its U.S. house numbers have gaps, so some addresses come back as a
+  street only, and the user adds the number.  A suggestion fills the form; the address rules (a
+  U.S. state, a ZIP code) still check what it filled.
+- **The credit.**  OpenStreetMap's licence asks for "© OpenStreetMap contributors" wherever its data
+  is shown: the endpoint returns it, and the clients show it under the suggestions.
+
+Nominatim, OpenStreetMap's own geocoder, needs no key either, but its usage policy forbids
+search-as-you-type on the public server.  The USPS Web Tools APIs were retired in January 2026,
+and their successors need an OAuth key; Google Places needs a key and billing.
+
+---
+
 ## The database schema
 
 The schema is managed with **EF Core migrations**, in `TempHire.Model/Migrations/`
@@ -834,6 +862,7 @@ provider, delete them and add a new initial migration (see [The database schema]
 | Token signing and encryption keys | `Program.cs` | **Development certificates**, which OpenIddict creates in the current user's certificate store; outside Development the server starts only once you load real ones (`AddSigningCertificate`, `AddEncryptionCertificate`) |
 | `OAuth:Origins` | `appsettings.json` (optional) | The server's public origins, which name the token audiences; defaults to the URLs it listens on.  Set it behind a proxy |
 | `AllowedClientOrigins` | `appsettings.json` | CORS allow-list for the client's dev server, and where the app's OAuth redirect URIs may point |
+| `AddressSuggestions:BaseUrl` | `appsettings.json` | The Photon server for [address completion](#address-completion); komoot's public one by default |
 | `Agent:Provider` | `appsettings.json`, or user secrets via `Set-ClaudeApiKey.ps1` | `Ollama` (default) or `Claude` |
 | `Agent:Ollama:*`, `Agent:Claude:Model` | `appsettings.json` | Endpoint and model names |
 | `Agent:Claude:ApiKey` | user secrets, via `Set-ClaudeApiKey.ps1` | **Never in `appsettings.json`** |

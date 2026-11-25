@@ -17,6 +17,8 @@ using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
 using TempHire.Model;
 using TempHire.Model.Identity;
+using Microsoft.Extensions.Options;
+using TempHire.Server.Addresses;
 using TempHire.Server.Agent;
 using TempHire.Server.Agent.Usage;
 using TempHire.Server.Auth;
@@ -340,6 +342,18 @@ builder.Services.AddHttpClient(nameof(QuinnAgent));
 
 // Quinn's token quotas, per user and per company (Agent:Quotas), and the usage they are checked against.
 builder.Services.AddScoped<QuinnUsageStore>();
+
+// ---------------------------------------------------------------------------------------------
+// Address completion - see AddressController.  Photon, per the AddressSuggestions section.
+// ---------------------------------------------------------------------------------------------
+builder.Services.Configure<AddressSuggestionOptions>(builder.Configuration.GetSection(AddressSuggestionOptions.SectionName));
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient<PhotonAddressSuggester>((services, http) =>
+{
+    http.BaseAddress = new Uri(services.GetRequiredService<IOptions<AddressSuggestionOptions>>().Value.BaseUrl);
+    // The public server asks clients to say who they are.
+    http.DefaultRequestHeaders.UserAgent.ParseAdd("TempHire/1.0 (address suggestions)");
+});
 
 // ---------------------------------------------------------------------------------------------
 // CORS - the client's dev server runs on a different origin (localhost:4200 for Angular)
