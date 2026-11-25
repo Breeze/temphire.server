@@ -90,7 +90,10 @@ public class AgentController(
     /// list), a question for the user, <c>{"type": "input", "id": "...", "content": "...",
     /// "choices": [{"value": "...", "label": "..."}]}</c> (no choices: a confirmation), to answer at
     /// <c>api/agent/answer</c>, <c>{"type": "inputClosed", "id": "..."}</c> when it can no longer be
-    /// answered, <c>{"type": "done"}</c> when the answer is complete, or
+    /// answered, <c>{"type": "saved", "changes": [{"entityType": "Address", "id": "...",
+    /// "staffingResourceId": "...", "summary": "..."}]}</c> when a tool has saved a change (refresh
+    /// what shows it, and send the summaries back with the answer, as its <c>saved</c>),
+    /// <c>{"type": "done"}</c> when the answer is complete, or
     /// <c>{"type": "error", "content": "..."}</c> if it fails part-way.
     /// </response>
     /// <response code="400">No question: the conversation is empty or doesn't end with the user's message.</response>
@@ -125,9 +128,9 @@ public class AgentController(
         var conversation = (request?.Messages ?? [])
             .Where(m => !string.IsNullOrWhiteSpace(m?.Content))
             .TakeLast(MaxMessages)
-            .Select(m => new ChatMessage(
-                m.Role == "assistant" ? ChatRole.Assistant : ChatRole.User,
-                m.Content.Length > MaxMessageLength ? m.Content[..MaxMessageLength] : m.Content))
+            .Select(m => m.Role == "assistant"
+                ? new ChatMessage(ChatRole.Assistant, WithSaved(m))
+                : new ChatMessage(ChatRole.User, Cut(m.Content)))
             .ToList();
 
         if (conversation.Count == 0 || conversation[^1].Role != ChatRole.User)
@@ -242,6 +245,23 @@ public class AgentController(
         }
     }
 
+    private static string Cut(string text) => text.Length > MaxMessageLength ? text[..MaxMessageLength] : text;
+
+    /// <summary>
+    /// An earlier answer, with what its tools saved in front of it.  The conversation comes back
+    /// without the tool calls of earlier answers, so without this the model sees an answer that
+    /// says it changed something and no change behind it, and takes it back (see
+    /// <c>ToolResultChanges</c>).  The note is what the stream reported as saved, which the client
+    /// kept with the answer; Quinn's system prompt says what it means.
+    /// </summary>
+    private static string WithSaved(ChatRequestMessage message)
+    {
+        var saved = (message.Saved ?? []).Where(s => !string.IsNullOrWhiteSpace(s)).Take(5).Select(s => Cut(s.Trim())).ToList();
+        return saved.Count == 0
+            ? Cut(message.Content)
+            : $"[Saved in this answer: {string.Join(" ", saved)}]\n\n{Cut(message.Content)}";
+    }
+
     /// <summary>The provider and model a question is answered with.</summary>
     private record UsageModel(string Provider, string Model);
 
@@ -302,6 +322,12 @@ public class ChatRequestMessage
 
     /// <summary>The message, in Markdown.</summary>
     public string Content { get; set; }
+
+    /// <summary>
+    /// For an answer: what its tools saved, as the stream's <c>saved</c> line summarized it.  Sent
+    /// back so the model knows, since the tool calls themselves are not.
+    /// </summary>
+    public List<string> Saved { get; set; }
 }
 
 /// <summary>The user's answer to a question Quinn is waiting on.</summary>

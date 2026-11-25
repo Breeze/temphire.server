@@ -249,6 +249,13 @@ public sealed class AddressUpdateToolsTests : IAsyncLifetime
         var result = await CallAsync("update_staffing_resource_address", Change(resource.Id, address.Id));
 
         Assert.True(result.GetProperty("updated").GetBoolean());
+        var changed = Assert.Single(result.GetProperty("changed").EnumerateArray());
+        Assert.Equal("Address", changed.GetProperty("entityType").GetString());
+        Assert.Equal(address.Id, changed.GetProperty("id").GetGuid());
+        Assert.Equal(resource.Id, changed.GetProperty("staffingResourceId").GetGuid());
+        Assert.Equal(
+            "Updated Ann Lee's Home Address from 1 Main St, Seattle, WA 98101 to 200 Pine St, Portland, OR 97204.",
+            changed.GetProperty("summary").GetString());
         var question = Assert.Single(_asked);
         Assert.Contains("**Ann Lee**'s Home Address", question.Message);
         Assert.Contains("**Current:** 1 Main St, Seattle, WA 98101", question.Message);
@@ -272,6 +279,7 @@ public sealed class AddressUpdateToolsTests : IAsyncLifetime
         var result = await CallAsync("update_staffing_resource_address", Change(resource.Id, address.Id));
 
         Assert.False(result.GetProperty("updated").GetBoolean());
+        Assert.False(result.TryGetProperty("changed", out _));
         Assert.Single(_asked);
         Assert.Equal("1 Main St", _db.Load<Address>(address.Id).Address1);
     }

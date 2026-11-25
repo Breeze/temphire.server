@@ -168,6 +168,7 @@ real SQL and need no SQL Server:
 | `ResourceQueryTests` | The staffing resource queries return what the client asks for, and load related collections with one SQL query each (the client's load and Quinn's) |
 | `AuthorizationRulesTests` | Every controller action declares who may call it, and the save and Quinn's tools check the same roles as the policies |
 | `AddressUpdateToolsTests` | Changing an address through the MCP tools, with an MCP client over HTTP and a stand-in for the user: which address, completing the new one (the house number and ZIP code Photon lacks), and the save only after the user confirms, through the save interceptor; another resource's or company's address, a change that breaks the rules, a reader, and an answer the tool never asked for change nothing |
+| `ToolResultChangesTests` | What the tools of an answer saved, read from their results for the client to refresh and to keep with the answer, and only what a result reports under `changed` |
 | `QuinnQuestionsTests` | The questions Quinn's answer waits on: only the user asked can answer, once, with one of the choices offered; a question whose answer stream ends is cancelled |
 | `QuinnUsageTests` | Quinn's budgets: days, weeks and months in UTC, which rule applies, what tokens cost (cache reads and writes included), and which budget stops a user and until when |
 | `BreezeQueryLimitsTests` | The query limits over HTTP, through the real filter pipeline: the 1000-row cap, how deep each endpoint may expand or select, that no `[BreezeQueryFilter]` attribute leaves a limit out, and rows in key order unless the client's `orderBy` replaces it |
@@ -289,6 +290,17 @@ builds, through `TempHirePersistenceManager`, so everything a client save goes t
 the editor check, the entity-type check, the audit columns, the row version, the validation again,
 and the tenant check on the write.  An address someone else changed since it was read is a
 conflict, and nothing is saved.
+
+**After the change.**  The tool's result lists what it saved (`changed`), and `QuinnAgent` passes
+that on in the answer stream as a `saved` line (`ToolResultChanges`), taken from the tool result,
+never from the model.  The clients announce it as a save: the search list reloads, and Resource
+Management reloads the resource it shows.  A user who is editing that resource with unsaved changes
+is asked whether to discard them; if not, the rest of the record is refreshed and their changes
+stay, ready to save.  Each change also has a one-line summary, which the client keeps with the
+answer and sends back with the conversation; `AgentController` puts it in front of that answer
+(`[Saved in this answer: ...]`).  The conversation comes back without the tool calls of earlier
+answers, and without the summary Quinn, seeing an answer that said it had changed an address and
+no update behind it, took the change back on the next question.
 
 ### Ollama or Claude
 

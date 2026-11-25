@@ -135,6 +135,12 @@ public class QuinnAgent(
                 {
                     results.AddRange(newResults);
                     updates.TryWrite(QuinnUpdate.PeopleFound(ToolResultPeople.In(results)));
+
+                    // A tool saved something: the client refreshes what it shows of it.
+                    if (ToolResultChanges.In(newResults) is { Count: > 0 } saved)
+                    {
+                        updates.TryWrite(QuinnUpdate.Saved(saved));
+                    }
                 }
 
                 if (update.Role != ChatRole.Tool && !string.IsNullOrEmpty(update.Text))
@@ -244,7 +250,8 @@ public class QuinnAgent(
 /// <summary>
 /// One piece of a streamed answer: some <c>text</c> as the model writes it, the <c>people</c> the
 /// answer can mention, a question for the user (<c>input</c>, and <c>inputClosed</c> when it
-/// can no longer be answered), <c>done</c> at the end, or an <c>error</c>.  Sent to the client as
+/// can no longer be answered), what a tool <c>saved</c>, <c>done</c> at the end, or an
+/// <c>error</c>.  Sent to the client as
 /// one JSON object per line; properties without a value are left out.
 /// </summary>
 public record QuinnUpdate(
@@ -252,7 +259,8 @@ public record QuinnUpdate(
     string Content = null,
     IReadOnlyList<MentionedPerson> People = null,
     string Id = null,
-    IReadOnlyList<QuinnChoice> Choices = null)
+    IReadOnlyList<QuinnChoice> Choices = null,
+    IReadOnlyList<SavedEntity> Changes = null)
 {
     public static QuinnUpdate Text(string text) => new("text", text);
 
@@ -270,6 +278,12 @@ public record QuinnUpdate(
 
     /// <summary>The question can no longer be answered: it timed out, or the stream is ending.</summary>
     public static QuinnUpdate InputClosed(string id) => new("inputClosed", Id: id);
+
+    /// <summary>
+    /// What a tool saved, such as the address Quinn changed: the client refreshes what it shows of
+    /// those entities, as after a save of its own (see <see cref="ToolResultChanges"/>).
+    /// </summary>
+    public static QuinnUpdate Saved(IReadOnlyList<SavedEntity> changes) => new("saved", Changes: changes);
 
     public static QuinnUpdate Done() => new("done");
 

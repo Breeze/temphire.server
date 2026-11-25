@@ -451,7 +451,19 @@ public partial class AddressUpdateTools(
             staffingResource = resource.Name,
             addressType = stored.AddressType.DisplayName,
             previousAddress = from,
-            newAddress = to
+            newAddress = to,
+            // What was saved, for the client to refresh, and to remember in the conversation
+            // (Agent/ToolResultChanges).
+            changed = new[]
+            {
+                new
+                {
+                    entityType = nameof(Address),
+                    id = stored.Id,
+                    staffingResourceId = resource.Id,
+                    summary = $"Updated {resource.Name}'s {stored.AddressType.DisplayName} from {from} to {to}."
+                }
+            }
         };
     }
 

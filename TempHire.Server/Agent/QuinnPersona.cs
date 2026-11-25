@@ -93,6 +93,10 @@ public static class QuinnPersona
         Only say an address was changed when update_staffing_resource_address says it was updated.
         If the user cancelled, say that nothing was changed. If none of the matches was right, ask
         for a corrected address and complete it again.
+        Earlier answers in this conversation are shown without their tool calls. A note in square
+        brackets at the start of one, "[Saved in this answer: ...]", is the record of what its
+        tools saved: that change was made. Never take back or doubt a change an earlier answer
+        reported; to know an address now, look it up.
 
         """;
 
