@@ -8,9 +8,11 @@
     "Addresses are U.S. addresses: a state, and a U.S. ZIP code.  Phone numbers are U.S. numbers in one field, area code included, in any of the common ways to write one: 10 digits; with dashes, dots or spaces between area code, prefix and line number, the same separator throughout; or the area code in parentheses, (206) 555-1234 or (206)555-1234.  Any of these may start with the country code, 1 or +1.  The clients rewrite a valid number as (206) 555-1234 when the user leaves the field.  The pattern has no backreferences: it runs in JavaScript and .NET, which treat a reference to a group that didn't match differently.",
     "A date of birth is a plausible one: not in the future, and not further back than the longest documented human life, 122 years and 164 days, so no more than 123 years ago."
   ],
-
-  "global": { "validators": ["breeze"] },
-
+  "global": {
+    "validators": [
+      "breeze"
+    ]
+  },
   "StaffingResource": {
     "validators": [
       {
@@ -32,17 +34,38 @@
       {
         "name": "expression",
         "id": "ADULT_WHEN_HIRED",
-        "propertyNames": ["dateOfBirth", "hireDate"],
+        "propertyNames": [
+          "dateOfBirth",
+          "hireDate"
+        ],
         "context": {
-          "expression": "!model.dateOfBirth || !model.hireDate || new Date(model.dateOfBirth.getFullYear() + 18, model.dateOfBirth.getMonth(), model.dateOfBirth.getDate()) <= model.hireDate",
+          "expression": "new Date(model.dateOfBirth.getFullYear() + 18, model.dateOfBirth.getMonth(), model.dateOfBirth.getDate()) <= model.hireDate",
           "messageTemplate": "A staffing resource must be at least 18 years old when hired"
-        }
+        },
+        "condition": "model.dateOfBirth && model.hireDate"
+      },
+      {
+        "name": "expression",
+        "context": {
+          "expression": "model.dateOfBirth",
+          "messageTemplate": "Date of birth is required if Hire date is specified."
+        },
+        "condition": "model.hireDate",
+        "id": "DATE_OF_BIRTH_REQUIRED_WITH_HIRE_DATE",
+        "propertyNames": [
+          "dateOfBirth"
+        ]
       }
     ],
     "properties": {
       "dateOfBirth": {
         "validators": [
-          { "name": "date", "context": { "messageTemplate": "'%displayName%' must be a valid date" } },
+          {
+            "name": "date",
+            "context": {
+              "messageTemplate": "'%displayName%' must be a valid date"
+            }
+          },
           {
             "name": "range",
             "id": "PLAUSIBLE_DATE_OF_BIRTH",
@@ -55,11 +78,17 @@
         ]
       },
       "hireDate": {
-        "validators": [{ "name": "date", "context": { "messageTemplate": "'%displayName%' must be a valid date" } }]
+        "validators": [
+          {
+            "name": "date",
+            "context": {
+              "messageTemplate": "'%displayName%' must be a valid date"
+            }
+          }
+        ]
       }
     }
   },
-
   "Address": {
     "properties": {
       "stateId": {
@@ -78,13 +107,14 @@
         "validators": [
           {
             "name": "zipCode",
-            "context": { "messageTemplate": "'%displayName%' must be a U.S. ZIP code, like 98101 or 98101-1234" }
+            "context": {
+              "messageTemplate": "'%displayName%' must be a U.S. ZIP code, like 98101 or 98101-1234"
+            }
           }
         ]
       }
     }
   },
-
   "PhoneNumber": {
     "properties": {
       "number": {
@@ -101,29 +131,49 @@
       }
     }
   },
-
   "Rate": {
     "properties": {
       "amount": {
         "validators": [
-          { "name": "currency", "context": { "messageTemplate": "'%displayName%' must be a valid amount" } },
+          {
+            "name": "currency",
+            "context": {
+              "messageTemplate": "'%displayName%' must be a valid amount"
+            }
+          },
           {
             "name": "range",
             "id": "RATE_NOT_NEGATIVE",
-            "context": { "minValue": 0, "messageTemplate": "%displayName% must not be negative" }
+            "context": {
+              "minValue": 0,
+              "messageTemplate": "%displayName% must not be negative"
+            }
           }
         ]
       }
     }
   },
-
   "WorkExperienceItem": {
     "properties": {
       "from": {
-        "validators": [{ "name": "date", "context": { "messageTemplate": "'%displayName%' must be a valid date" } }]
+        "validators": [
+          {
+            "name": "date",
+            "context": {
+              "messageTemplate": "'%displayName%' must be a valid date"
+            }
+          }
+        ]
       },
       "to": {
-        "validators": [{ "name": "date", "context": { "messageTemplate": "'%displayName%' must be a valid date" } }]
+        "validators": [
+          {
+            "name": "date",
+            "context": {
+              "messageTemplate": "'%displayName%' must be a valid date"
+            }
+          }
+        ]
       }
     }
   }
