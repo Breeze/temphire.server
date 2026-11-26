@@ -777,7 +777,8 @@ The validation rules are written once, here, in two places:
   clients rewrite a valid one as `(206) 555-1234` when the user leaves the field; a rate is a
   valid amount and not negative; dates are valid dates; a date of birth is neither in the future
   nor more than 123 years ago (the longest documented life is 122); and a staffing resource has at
-  least one address and one phone number, and it is at least 18 years old when hired.
+  least one address and one phone number, has a date of birth once it has a hire date, and is at
+  least 18 years old when hired.
 
 The sample data a new database is seeded with passes all of them: `SampleDataTests` validates
 every seeded row with the server's own rules, so a new rule that the sample data would break fails
