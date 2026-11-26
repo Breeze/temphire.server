@@ -51,7 +51,7 @@
           "messageTemplate": "Date of birth is required if Hire date is specified."
         },
         "condition": "model.hireDate",
-        "id": "DATE_OF_BIRTH_REQUIRE_WITH_HIRE_DATE",
+        "id": "DATE_OF_BIRTH_REQUIRED_WITH_HIRE_DATE",
         "propertyNames": [
           "dateOfBirth"
         ]
