@@ -88,11 +88,15 @@ The password is **`password`** for all of them:
 |---|---|---|
 | `anna@harbor.test` | Harbor Staffing | Editor |
 | `ben@harbor.test` | Harbor Staffing | Reader |
+| `emma@harbor.test` | Harbor Staffing | none |
 | `carla@summit.test` | Summit Talent | Editor |
 | `david@summit.test` | Summit Talent | Reader |
+| `felix@summit.test` | Summit Talent | none |
 
-An **Editor** can add, change and delete staffing resources; a **Reader** can only look at them
-(see [Roles](#roles)).  When the server runs in the Development environment, its sign-in page lists
+An **Editor** can add, change and delete staffing resources; a **Reader** can only look at them;
+a user with **no role** can sign in, and talk to Quinn about its name, but sees none of the
+company's data (see [Roles](#roles)).  The server creates any sample user that is missing on every
+start, so a database seeded before one was added gets it too.  When the server runs in the Development environment, its sign-in page lists
 the sample users, and a click on one signs in as that user; anywhere else it doesn't offer them.
 
 ### Swagger

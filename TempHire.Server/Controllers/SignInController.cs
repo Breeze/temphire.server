@@ -125,7 +125,7 @@ public class SignInController(
         foreach (var (userName, role) in SampleDataProvider.Users)
         {
             var tenant = await _tenants.ForEmailAsync(userName, HttpContext.RequestAborted);
-            model.SampleUsers.Add(new SampleUser(userName, role, tenant?.Name ?? ""));
+            model.SampleUsers.Add(new SampleUser(userName, role ?? "no role", tenant?.Name ?? ""));
         }
 
         return model;
