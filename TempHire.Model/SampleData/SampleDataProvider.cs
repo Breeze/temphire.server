@@ -38,15 +38,18 @@ public partial class SampleDataProvider
     };
 
     /// <summary>
-    /// The test users and their roles: in each company, one editor and one reader.  All have the
-    /// password <c>password</c>.
+    /// The test users and their roles: in each company, one editor, one reader and one user with no
+    /// role (null), who can sign in and talk to Quinn but see none of the company's data.  All have
+    /// the password <c>password</c>.
     /// </summary>
     public static readonly (string UserName, string Role)[] Users =
     [
         ("anna@harbor.test", TempHireRoles.Editor),
         ("ben@harbor.test", TempHireRoles.Reader),
+        ("emma@harbor.test", null),
         ("carla@summit.test", TempHireRoles.Editor),
-        ("david@summit.test", TempHireRoles.Reader)
+        ("david@summit.test", TempHireRoles.Reader),
+        ("felix@summit.test", null)
     ];
 
     public const string Password = "password";
@@ -76,14 +79,7 @@ public partial class SampleDataProvider
             context.SaveChanges();
         }
 
-        if (!identityContext.Users.Any())
-        {
-            // Replaces SecuritySampleDataProvider.  The user name is an email address: its domain
-            // decides the tenant.
-            identityContext.Users.AddRange(Users.Select(u => CreateUser(u.UserName)));
-            identityContext.SaveChanges();
-        }
-
+        SeedUsers(identityContext);
         SeedRoles(identityContext);
 
         // Seeding runs without a signed-in user, so look past the tenant filter.
@@ -201,9 +197,26 @@ public partial class SampleDataProvider
     private static Tenant Copy(Tenant t) => new() { Id = t.Id, Name = t.Name, EmailDomain = t.EmailDomain };
 
     /// <summary>
+    /// Creates the sample users that are missing - replaces <c>SecuritySampleDataProvider</c>.  The
+    /// user name is an email address: its domain decides the tenant.  Runs on every start, so a
+    /// database seeded before a sample user was added gets them too; users already there are left
+    /// as they are, passwords included.
+    /// </summary>
+    private static void SeedUsers(TempHireIdentityDbContext identityContext)
+    {
+        var existing = identityContext.Users.Select(u => u.NormalizedUserName).ToHashSet();
+        var missing = Users.Where(u => !existing.Contains(u.UserName.ToUpperInvariant())).ToList();
+        if (missing.Count > 0)
+        {
+            identityContext.Users.AddRange(missing.Select(u => CreateUser(u.UserName)));
+            identityContext.SaveChanges();
+        }
+    }
+
+    /// <summary>
     /// Creates the roles that are missing, and gives each sample user without a role the one in
-    /// <see cref="Users"/>.  Runs on every start, so a database seeded before roles existed gets
-    /// them too, and a role assigned by other means is left alone.
+    /// <see cref="Users"/>, if it has one.  Runs on every start, so a database seeded before roles
+    /// existed gets them too, and a role assigned by other means is left alone.
     /// </summary>
     private static void SeedRoles(TempHireIdentityDbContext identityContext)
     {
@@ -223,7 +236,7 @@ public partial class SampleDataProvider
         var roleIds = identityContext.Roles.ToDictionary(r => r.Name, r => r.Id);
         var usersWithRoles = identityContext.UserRoles.Select(ur => ur.UserId).ToHashSet();
 
-        foreach (var (userName, role) in Users)
+        foreach (var (userName, role) in Users.Where(u => u.Role is not null))
         {
             var normalized = userName.ToUpperInvariant();
             var user = identityContext.Users.SingleOrDefault(u => u.NormalizedUserName == normalized);
