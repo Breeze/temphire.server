@@ -225,7 +225,7 @@ sequenceDiagram
   Q->>W: tools/call
   W->>P: Search
   P-->>W: One match<br/>(several: the user picks)
-  Note over W: No house number or ZIP code<br/>from Photon: the typed ones
+  Note over W: No house number or ZIP code<br/>from Photon: the typed ones<br/>(the ZIP code if in the same state)
   W-->>Q: The completed address
   L-->>Q: update_staffing_<br/>resource_address
   Q->>W: tools/call
@@ -251,8 +251,8 @@ sequenceDiagram
 
 - **Steps 11-12: Photon's gaps are filled from what the user typed.**  OpenStreetMap's U.S. house
   numbers have gaps, so a match may be only the street, or have no ZIP code.  It then gets the
-  house number the user gave first, and a ZIP code they gave after it, so "908 W Capital Way,
-  Tacoma" completes to that house, not to the street.  The address service does this
+  house number the user gave first, and a ZIP code they gave after it if that ZIP code is in the
+  match's state, so "908 W Capital Way, Tacoma" completes to that house, not to the street.  The address service does this
   (`PhotonAddressSuggester`), not the tool, so the address form's completion fills the same gaps
   from what the editor types into Address 1.  See
   [Address completion](../README.md#address-completion).

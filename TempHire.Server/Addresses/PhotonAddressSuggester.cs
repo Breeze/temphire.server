@@ -13,7 +13,9 @@ namespace TempHire.Server.Addresses;
 /// </param>
 /// <param name="City">The city, or the nearest place name Photon has for it.</param>
 /// <param name="State">The state's full name, as Photon gives it ("Washington").</param>
-/// <param name="Zipcode">The ZIP code, when Photon has a valid one; else the one the user typed, if any.</param>
+/// <param name="Zipcode">
+/// The ZIP code, when Photon has a valid one; else the one the user typed, if it is in this state.
+/// </param>
 public sealed record PhotonAddress(string Address1, string City, string State, string Zipcode);
 
 /// <summary>
@@ -80,8 +82,10 @@ public sealed partial class PhotonAddressSuggester(
     ///   <item>OpenStreetMap's U.S. house numbers have gaps, so an address may be only the street.  It
     ///   gets the house number the user typed first, so "908 W Capital Way" completes to that house,
     ///   not to the street.  An address that has a number keeps it.</item>
-    ///   <item>An address without a ZIP code gets the one the user typed, if any: the last one after
-    ///   the house number, so a five-digit house number isn't taken for a ZIP code.</item>
+    ///   <item>An address without a ZIP code gets the one the user typed, if any, when that ZIP code
+    ///   is in the address's state (<see cref="ZipCodeStates"/>): a ZIP code typed for Montana
+    ///   doesn't end up on a street in Texas.  It is the last one after the house number, so a
+    ///   five-digit house number isn't taken for a ZIP code.</item>
     /// </list>
     /// Filling can make two addresses the same; the duplicate is dropped.
     /// </summary>
@@ -91,6 +95,11 @@ public sealed partial class PhotonAddressSuggester(
         var number = numberMatch.Success ? numberMatch.Groups[1].Value : null;
         var afterNumber = numberMatch.Success ? numberMatch.Groups[1].Index + numberMatch.Groups[1].Length : 0;
         var zip = TypedZipCode().Matches(typed ?? "").LastOrDefault(m => m.Index >= afterNumber)?.Value;
+        var zipState = zip is null ? null : ZipCodeStates.StateOf(zip);
+        if (zipState is null)
+        {
+            zip = null;
+        }
 
         if (number is null && zip is null)
         {
@@ -103,7 +112,7 @@ public sealed partial class PhotonAddressSuggester(
                 .Select(a => a with
                 {
                     Address1 = number is not null && !StartsWithNumber().IsMatch(a.Address1) ? $"{number} {a.Address1}" : a.Address1,
-                    Zipcode = a.Zipcode ?? zip
+                    Zipcode = a.Zipcode ?? (zip is not null && string.Equals(a.State, zipState, StringComparison.OrdinalIgnoreCase) ? zip : null)
                 })
                 .Distinct()
         ];
