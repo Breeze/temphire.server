@@ -756,12 +756,12 @@ whatever the sign-in.  What a provider adds:
 
 ## Validation
 
-> Validation uses [IdeaBlade Validation](https://github.com/Breeze/ideablade-validation) 0.1.0,
+> Validation uses [IdeaBlade Validation](https://github.com/Breeze/ideablade-validation) 0.1.1,
 > the [`IdeaBlade.Validation`](https://www.nuget.org/packages/IdeaBlade.Validation) package on
 > NuGet.  As with any 0.x version, its API may still change between minor versions.
 >
 > `$schema` in `TempHire.Server/Validation/validation.metadata.json` points at the library's
-> schema on GitHub, pinned to the commit of the version the server uses (`v0.1.0`), so the editor
+> schema on GitHub, pinned to the commit of the version the server uses (`v0.1.1`), so the editor
 > checks the rules the package runs; move it along with the package version.  (Not a relative
 > path into a client's `node_modules`: Visual Studio reports "Error loading schema" for it, and it
 > leads nowhere in a clone of this repository on its own.)
