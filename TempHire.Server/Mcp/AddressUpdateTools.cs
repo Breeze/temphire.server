@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Security.Claims;
-using System.Text.RegularExpressions;
 using Breeze.Persistence;
 using IdeaBlade.Validation;
 using Microsoft.AspNetCore.DataProtection;
@@ -59,7 +58,7 @@ namespace TempHire.Server.Mcp;
 /// </para>
 /// </summary>
 [McpServerToolType]
-public partial class AddressUpdateTools(
+public class AddressUpdateTools(
     TempHireDbContext db,
     PhotonAddressSuggester suggester,
     ValidationService validation,
@@ -226,7 +225,7 @@ public partial class AddressUpdateTools(
 
         var text = (address ?? "").Trim();
         var states = await _db.States.AsNoTracking().ToListAsync(cancellationToken);
-        var candidates = Complete(text, await _suggester.SuggestAsync(text, cancellationToken), states);
+        var candidates = Complete(await _suggester.SuggestAsync(text, cancellationToken), states);
 
         if (candidates.Count == 0)
         {
@@ -282,48 +281,23 @@ public partial class AddressUpdateTools(
     }
 
     /// <summary>
-    /// Photon's matches as TempHire addresses, filling the gaps of the address service from what the
-    /// user typed:
-    /// <list type="bullet">
-    ///   <item>OpenStreetMap's U.S. house numbers have gaps, so a match may be only the street.  It
-    ///   gets the house number the user gave, so "908 W Capital Way" completes to that house, not
-    ///   to the street.  (The address form does the same, in its address completion.)</item>
-    ///   <item>A match without a ZIP code gets the one the user gave, if any.</item>
-    ///   <item>Matches in a state TempHire doesn't have are dropped: the address couldn't be saved.</item>
-    /// </list>
+    /// Photon's matches as TempHire addresses, with the state as its two-letter code.  The address
+    /// service has already filled a missing house number and ZIP code from what the user typed
+    /// (<see cref="PhotonAddressSuggester.FillFromTyped"/>), as it does for the address form.  Matches
+    /// in a state TempHire doesn't have are dropped: the address couldn't be saved.
     /// </summary>
-    internal static List<CompletedAddress> Complete(string text, IEnumerable<PhotonAddress> matches, IEnumerable<State> states)
+    internal static List<CompletedAddress> Complete(IEnumerable<PhotonAddress> matches, IEnumerable<State> states)
     {
-        var number = HouseNumber().Match(text) is { Success: true } n ? n.Groups[1].Value : null;
-        var zip = ZipCode().Matches(text).LastOrDefault()?.Value;
         var byName = states.ToDictionary(s => s.Name, s => s.ShortName, StringComparer.OrdinalIgnoreCase);
 
         return
         [
             .. matches
                 .Where(m => m.State is not null && byName.ContainsKey(m.State))
-                .Select(m => new CompletedAddress(
-                    Address1: number is not null && !StartsWithNumber().IsMatch(m.Address1) ? $"{number} {m.Address1}" : m.Address1,
-                    City: m.City,
-                    State: byName[m.State],
-                    Zipcode: m.Zipcode ?? zip))
+                .Select(m => new CompletedAddress(m.Address1, m.City, byName[m.State], m.Zipcode))
                 .Distinct()
         ];
     }
-
-    /// <summary>The house number at the start of what the user typed: <c>908</c>, <c>12B</c>, <c>1200-A</c>.</summary>
-    [GeneratedRegex(@"^\s*(\d+[A-Za-z]?(?:-\w+)?)\s+\S")]
-    private static partial Regex HouseNumber();
-
-    /// <summary>
-    /// A house number at the start of a match: <c>908 Main St</c>, but not the street of
-    /// <c>11th Avenue</c>, which is a street without a number.
-    /// </summary>
-    [GeneratedRegex(@"^\d+[A-Za-z]?(?:-\w+)?\s")]
-    private static partial Regex StartsWithNumber();
-
-    [GeneratedRegex(@"\b\d{5}(?:-\d{4})?\b")]
-    private static partial Regex ZipCode();
 
     // ------------------------------------------------------------------------------------------
     // Step 3: check, confirm and save

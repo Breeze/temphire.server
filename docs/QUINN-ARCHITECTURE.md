@@ -225,6 +225,7 @@ sequenceDiagram
   Q->>W: tools/call
   W->>P: Search
   P-->>W: One match<br/>(several: the user picks)
+  Note over W: No house number or ZIP code<br/>from Photon: the typed ones
   W-->>Q: The completed address
   L-->>Q: update_staffing_<br/>resource_address
   Q->>W: tools/call
@@ -248,6 +249,13 @@ sequenceDiagram
   Q-->>C: text lines, done
 ```
 
+- **Steps 11-12: Photon's gaps are filled from what the user typed.**  OpenStreetMap's U.S. house
+  numbers have gaps, so a match may be only the street, or have no ZIP code.  It then gets the
+  house number the user gave first, and a ZIP code they gave after it, so "908 W Capital Way,
+  Tacoma" completes to that house, not to the street.  The address service does this
+  (`PhotonAddressSuggester`), not the tool, so the address form's completion fills the same gaps
+  from what the editor types into Address 1.  See
+  [Address completion](../README.md#address-completion).
 - **Steps 16-22: the user answers, not the model.**  The confirmation is an
   [MCP elicitation](https://modelcontextprotocol.io/specification/2025-11-25/client/elicitation):
   the tool asks the user through the MCP client in the middle of its call.  `QuinnAgent`'s
