@@ -29,7 +29,8 @@ public sealed class AddressSuggestionTests : IDisposable
 
     /// <summary>
     /// U.S. houses and streets, in Photon's order, without duplicates; not other countries, and not
-    /// places with no street.  A postcode the ZIP code rule wouldn't accept is left out.
+    /// places with no street.  A postcode the ZIP code rule wouldn't accept is left out.  (The street
+    /// gets the typed house number: see the tests below.)
     /// </summary>
     [Fact]
     public async Task Suggestions_are_US_streets_and_houses_with_what_the_form_needs()
@@ -50,7 +51,7 @@ public sealed class AddressSuggestionTests : IDisposable
         Assert.Equal(
             [
                 new PhotonAddress("908 Capital Boulevard", "Raleigh", "North Carolina", "27603"),
-                new PhotonAddress("Capitol Way South", "Olympia", "Washington", "98501-1234"),
+                new PhotonAddress("908 Capitol Way South", "Olympia", "Washington", "98501-1234"),
                 new PhotonAddress("12 Capital Street", "Boston", "Massachusetts", null),
             ],
             found);
@@ -93,6 +94,76 @@ public sealed class AddressSuggestionTests : IDisposable
     }
 
     /// <summary>
+    /// OpenStreetMap often knows a U.S. street but not the house: the street gets the house number
+    /// the user typed, for every caller.  An address with its own number keeps it, a numbered street
+    /// isn't taken for a house number, and an address that filling makes a duplicate is dropped.
+    /// </summary>
+    [Theory]
+    [InlineData("908 W Capital Way", "908 West Capital Way")]
+    [InlineData("12B W Capital", "12B West Capital Way")]
+    [InlineData("1200-A W Capital", "1200-A West Capital Way")]
+    [InlineData("West Capital Way", "West Capital Way")]
+    public async Task A_street_without_its_house_number_gets_the_one_typed(string typed, string address1)
+    {
+        _photon.Answer = Photon(("", "West Capital Way", "Tacoma", "Washington", "98401"));
+
+        var found = await NewSuggester().SuggestAsync(typed, CancellationToken.None);
+
+        Assert.Equal(address1, Assert.Single(found).Address1);
+    }
+
+    [Fact]
+    public async Task Only_addresses_without_a_number_get_the_typed_one()
+    {
+        _photon.Answer = Photon(
+            ("910", "West Capital Way", "Tacoma", "Washington", "98401"),
+            ("", "11th Avenue West", "Seattle", "Washington", "98119"),
+            ("449", "11th Avenue West", "Seattle", "Washington", "98119"));
+
+        var found = await NewSuggester().SuggestAsync("449 11th Ave", CancellationToken.None);
+
+        Assert.Equal(["910 West Capital Way", "449 11th Avenue West"], found.Select(a => a.Address1));
+    }
+
+    /// <summary>
+    /// An address without a ZIP code gets the one the user typed, if any; one Photon knows stays.  A
+    /// five-digit house number is not a ZIP code.
+    /// </summary>
+    [Fact]
+    public async Task A_missing_ZIP_code_is_the_one_typed()
+    {
+        _photon.Answer = Photon(
+            ("12", "Pine Street", "Seattle", "Washington", null),
+            ("12", "Pine Street", "Tacoma", "Washington", "98402"));
+
+        var found = await NewSuggester().SuggestAsync("12 Pine St, Seattle, WA 98101", CancellationToken.None);
+        Assert.Equal(["98101", "98402"], found.Select(a => a.Zipcode));
+
+        found = await NewSuggester().SuggestAsync("12 Pine St", CancellationToken.None);
+        Assert.Equal([null, "98402"], found.Select(a => a.Zipcode));
+
+        found = await NewSuggester().SuggestAsync("12345 Pine St", CancellationToken.None);
+        Assert.Equal([null, "98402"], found.Select(a => a.Zipcode));
+    }
+
+    /// <summary>The cache keeps Photon's answer: each request fills it from its own text.</summary>
+    [Fact]
+    public async Task A_cached_answer_is_filled_from_each_request()
+    {
+        _photon.Answer = Photon(("", "Pine Street", "Seattle", "Washington", null));
+        var suggester = NewSuggester();
+
+        var first = await suggester.SuggestAsync("12 Pine St 98101", CancellationToken.None);
+        var second = await suggester.SuggestAsync("Pine St", CancellationToken.None);
+        var third = await suggester.SuggestAsync("12 PINE ST 98101", CancellationToken.None);
+
+        Assert.Equal(new PhotonAddress("12 Pine Street", "Seattle", "Washington", "98101"), Assert.Single(first));
+        Assert.Equal(new PhotonAddress("Pine Street", "Seattle", "Washington", null), Assert.Single(second));
+        Assert.Equal(first, third);
+        Assert.Equal(2, _photon.Requests.Count);
+    }
+
+    /// <summary>
     /// The client gets the state's id among TempHire's states, to set the address's state with, and
     /// a label for the list; a state TempHire doesn't have leaves the id out.
     /// </summary>
@@ -118,7 +189,25 @@ public sealed class AddressSuggestionTests : IDisposable
 
         var cheyenne = result.Suggestions[1];
         Assert.Null(cheyenne.StateId);
-        Assert.Equal("Capitol Avenue, Cheyenne, Wyoming", cheyenne.Label);
+        Assert.Equal("1600 Capitol Avenue, Cheyenne, Wyoming", cheyenne.Label);
+    }
+
+    /// <summary>
+    /// The address form gets the typed house number and ZIP code too, in the fields and the label:
+    /// the same completion as Quinn's.
+    /// </summary>
+    [Fact]
+    public async Task The_endpoint_fills_the_gaps_from_the_typed_text()
+    {
+        _photon.Answer = Photon(("", "Capitol Way", "Olympia", "Washington", null));
+        using var db = _db.NewContext();
+        var controller = new AddressController(NewSuggester(), db);
+
+        var result = (await controller.Suggest("1600 Capitol Way 98501", CancellationToken.None)).Value!;
+
+        var olympia = Assert.Single(result.Suggestions);
+        Assert.Equal(("1600 Capitol Way", "98501"), (olympia.Address1, olympia.Zipcode));
+        Assert.Equal("1600 Capitol Way, Olympia, WA 98501", olympia.Label);
     }
 
     private PhotonAddressSuggester NewSuggester() => new(
@@ -126,6 +215,27 @@ public sealed class AddressSuggestionTests : IDisposable
         _cache,
         Options.Create(new AddressSuggestionOptions()),
         NullLogger<PhotonAddressSuggester>.Instance);
+
+    /// <summary>A Photon answer of U.S. houses (with a number) and streets (without one).</summary>
+    private static string Photon(params (string Number, string Street, string City, string State, string Zip)[] places) =>
+        System.Text.Json.JsonSerializer.Serialize(new
+        {
+            type = "FeatureCollection",
+            features = places.Select(p => new
+            {
+                properties = new Dictionary<string, string>
+                {
+                    ["type"] = p.Number == "" ? "street" : "house",
+                    ["housenumber"] = p.Number == "" ? null : p.Number,
+                    ["street"] = p.Number == "" ? null : p.Street,
+                    ["name"] = p.Number == "" ? p.Street : null,
+                    ["city"] = p.City,
+                    ["state"] = p.State,
+                    ["postcode"] = p.Zip,
+                    ["countrycode"] = "US",
+                }.Where(kv => kv.Value is not null).ToDictionary()
+            })
+        });
 
     /// <summary>Photon, as far as these tests need it: records each request and gives one answer.</summary>
     private sealed class FakePhoton : HttpMessageHandler

@@ -176,7 +176,7 @@ real SQL and need no SQL Server:
 | `SampleDataTests` | All the sample data passes every rule the server checks on a save, with a positive control |
 | `ResourceQueryTests` | The staffing resource queries return what the client asks for, and load related collections with one SQL query each (the client's load and Quinn's) |
 | `AuthorizationRulesTests` | Every controller action declares who may call it, and the save and Quinn's tools check the same roles as the policies |
-| `AddressUpdateToolsTests` | Changing an address through the MCP tools, with an MCP client over HTTP and a stand-in for the user: which address, completing the new one (the house number and ZIP code Photon lacks), and the save only after the user confirms, through the save interceptor; another resource's or company's address, a change that breaks the rules, a reader, and an answer the tool never asked for change nothing |
+| `AddressUpdateToolsTests` | Changing an address through the MCP tools, with an MCP client over HTTP and a stand-in for the user: which address, completing the new one (with the house number and ZIP code Photon lacks), and the save only after the user confirms, through the save interceptor; another resource's or company's address, a change that breaks the rules, a reader, and an answer the tool never asked for change nothing |
 | `ToolResultChangesTests` | What the tools of an answer saved, read from their results for the client to refresh and to keep with the answer, and only what a result reports under `changed` |
 | `QuinnQuestionsTests` | The questions Quinn's answer waits on: only the user asked can answer, once, with one of the choices offered; a question whose answer stream ends is cancelled |
 | `QuinnUsageTests` | Quinn's budgets: days, weeks and months in UTC, which rule applies, what tokens cost (cache reads and writes included), and which budget stops a user and until when |
@@ -257,7 +257,8 @@ Tacoma*).  Nothing else can change: no new address, no other property, no other 
    person doesn't have, the chat pane shows the addresses as radio buttons, with OK and Cancel.
 2. **The new address, completed.**  `complete_address` asks [Photon](#address-completion) for it.
    Photon's U.S. house numbers have gaps, so a match that is only the street gets the house number
-   the user typed, and a match without a ZIP code the user's ZIP code.  Several matches: the pane
+   the user typed, and a match without a ZIP code the user's ZIP code, as in the address form (see
+   [Address completion](#address-completion)).  Several matches: the pane
    shows them as radio buttons, with OK and Cancel; after Cancel, Quinn asks for a corrected address
    and tries again.
 3. **Check, confirm, save.**  `update_staffing_resource_address` checks the change, then the pane
@@ -873,9 +874,15 @@ Photon's state names to TempHire's states.
   caches each answer for ten minutes, and gives up after three seconds; the clients wait for a
   pause in the typing.  A failure gives no suggestions, and the user goes on typing.
 - **OpenStreetMap's coverage.**  Its U.S. house numbers have gaps, so some addresses come back as a
-  street only, and the user adds the number.  (Quinn's `complete_address` adds the number the user
-  typed itself; see [Changing an address through Quinn](#changing-an-address-through-quinn).)  A suggestion fills the form; the address rules (a
-  U.S. state, a ZIP code) still check what it filled.
+  street only, or without a ZIP code.  The server fills those gaps from what the user typed
+  (`PhotonAddressSuggester`): a street gets the house number at the start of the text, and an
+  address without a ZIP code gets one typed after it (*908 W Capital Way, Tacoma 98401*).  An
+  address Photon knows the number or ZIP code of keeps its own.  Every caller gets this: the
+  clients' suggestions and Quinn's `complete_address` (see
+  [Changing an address through Quinn](#changing-an-address-through-quinn)).  Only the Address 1
+  text counts, not the form's ZIP code field, which may still hold the previous address's.  A
+  suggestion fills the form; the address rules (a U.S. state, a ZIP code) still check what it
+  filled.
 - **The credit.**  OpenStreetMap's licence asks for "© OpenStreetMap contributors" wherever its data
   is shown: the endpoint returns it, and the clients show it under the suggestions.
 
