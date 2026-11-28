@@ -14,6 +14,11 @@ server, confines every user to their company's data, and runs **Quinn**, an AI a
 an MCP server of its own.  The clients' READMEs describe the application as a whole, how it came
 from the original Silverlight and WPF versions, and the client side.
 
+**Architecture diagrams.**  [TempHire's architecture](docs/ARCHITECTURE.md) is a C4 model of the
+system: its context, its containers (the two clients, this server, the two databases) and the
+server's components.  [Quinn's architecture](docs/QUINN-ARCHITECTURE.md) shows the assistant's
+components, the flow of a question and of a change, and why it is built that way.
+
 > **A note on the .NET version.** The server targets **`net10.0`** (LTS, supported to November
 > 2028) with the 10.0.x package set. It stays on .NET 10 rather than .NET 11 because Breeze 8
 > supports .NET 8, 9 and 10, and `Breeze.Persistence.EFCore` 8 requires EF Core 10 (it pins
@@ -193,7 +198,8 @@ framework.  *Quinn* comes from the Latin *quinque*, five as well.
 
 ### How it works
 
-Everything runs in this server, behind the same sign-in as the rest of the app:
+Everything runs in this server, behind the same sign-in as the rest of the app.  (The same, as
+C4 component and sequence diagrams: [Quinn's architecture](docs/QUINN-ARCHITECTURE.md).)
 
 ```
 client ──POST /api/agent/chat──► AgentController ──► QuinnAgent ──► IChatClient (Ollama or Claude)
@@ -954,6 +960,7 @@ provider, delete them and add a new initial migration (see [The database schema]
 ```
 temphire.server/
 ├── TempHire.sln
+├── docs/                      # architecture diagrams: TempHire's C4 model, Quinn's architecture
 ├── dotnet-tools.json          # dotnet-ef
 ├── Set-ClaudeApiKey.ps1       # stores the Claude API key in user secrets
 ├── TempHire.Model/            # POCO entities, DbContexts, sample data
