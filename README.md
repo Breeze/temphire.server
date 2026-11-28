@@ -257,7 +257,8 @@ Tacoma*).  Nothing else can change: no new address, no other property, no other 
    person doesn't have, the chat pane shows the addresses as radio buttons, with OK and Cancel.
 2. **The new address, completed.**  `complete_address` asks [Photon](#address-completion) for it.
    Photon's U.S. house numbers have gaps, so a match that is only the street gets the house number
-   the user typed, and a match without a ZIP code the user's ZIP code, as in the address form (see
+   the user typed, and a match without a ZIP code the user's ZIP code if it is in the match's state,
+   as in the address form (see
    [Address completion](#address-completion)).  Several matches: the pane
    shows them as radio buttons, with OK and Cancel; after Cancel, Quinn asks for a corrected address
    and tries again.
@@ -876,8 +877,10 @@ Photon's state names to TempHire's states.
 - **OpenStreetMap's coverage.**  Its U.S. house numbers have gaps, so some addresses come back as a
   street only, or without a ZIP code.  The server fills those gaps from what the user typed
   (`PhotonAddressSuggester`): a street gets the house number at the start of the text, and an
-  address without a ZIP code gets one typed after it (*908 W Capital Way, Tacoma 98401*).  An
-  address Photon knows the number or ZIP code of keeps its own.  Every caller gets this: the
+  address without a ZIP code gets one typed after it (*908 W Capital Way, Tacoma 98401*), but only
+  if the ZIP code is in that address's state, told by its first three digits (`ZipCodeStates`):
+  a ZIP code typed for Montana doesn't end up on a street in Texas.  An address Photon knows the
+  number or ZIP code of keeps its own.  Every caller gets this: the
   clients' suggestions and Quinn's `complete_address` (see
   [Changing an address through Quinn](#changing-an-address-through-quinn)).  Only the Address 1
   text counts, not the form's ZIP code field, which may still hold the previous address's.  A

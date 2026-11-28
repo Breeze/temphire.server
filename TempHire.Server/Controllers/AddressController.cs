@@ -37,8 +37,8 @@ public class AddressController(PhotonAddressSuggester suggester, TempHireDbConte
     /// and the state's id among TempHire's states.  Text shorter than three characters gets none,
     /// and so does a failure of the address service: the user goes on typing.  OpenStreetMap's U.S.
     /// house numbers have gaps, so some addresses only come back as a street: those get the house
-    /// number at the start of the text, and an address without a ZIP code gets one typed after it,
-    /// as in Quinn's <c>complete_address</c> tool.  camelCase names, unlike the Breeze endpoints.
+    /// number at the start of the text, and an address without a ZIP code gets one typed after it
+    /// if that ZIP code is in the address's state, as in Quinn's <c>complete_address</c> tool.  camelCase names, unlike the Breeze endpoints.
     /// </remarks>
     /// <param name="q">What the user has typed so far, such as <c>1600 Pennsylvania</c>.</param>
     /// <param name="cancellationToken">Cancelled when the client disconnects.</param>

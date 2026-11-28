@@ -146,6 +146,45 @@ public sealed class AddressSuggestionTests : IDisposable
         Assert.Equal([null, "98402"], found.Select(a => a.Zipcode));
     }
 
+    /// <summary>
+    /// The typed ZIP code fills only addresses in its own state: a street in another state with no
+    /// ZIP code of its own stays without one.  A ZIP code with no state (military, a territory)
+    /// fills none.
+    /// </summary>
+    [Fact]
+    public async Task The_typed_ZIP_code_fills_only_addresses_in_its_state()
+    {
+        _photon.Answer = Photon(
+            ("", "C Bar C Ranch Road", "Butte", "Montana", null),
+            ("", "East County Road 50", "Shenandoah", "Texas", null));
+
+        var found = await NewSuggester().SuggestAsync("50 C Bar C Ranch Road Butte 59701", CancellationToken.None);
+        Assert.Equal(["59701", null], found.Select(a => a.Zipcode));
+
+        found = await NewSuggester().SuggestAsync("50 C Bar C Ranch Road Butte 09001", CancellationToken.None);
+        Assert.Equal([null, null], found.Select(a => a.Zipcode));
+    }
+
+    [Theory]
+    [InlineData("59701", "Montana")]
+    [InlineData("98401-1234", "Washington")]
+    [InlineData("00501", "New York")]
+    [InlineData("02108", "Massachusetts")]
+    [InlineData("20500", "District of Columbia")]
+    [InlineData("22101", "Virginia")]
+    [InlineData("73301", "Texas")]
+    [InlineData("73101", "Oklahoma")]
+    [InlineData("88510", "Texas")]
+    [InlineData("99501", "Alaska")]
+    [InlineData("09001", null)]
+    [InlineData("96201", null)]
+    [InlineData("00901", null)]
+    [InlineData("abcde", null)]
+    [InlineData("123", null)]
+    [InlineData(null, null)]
+    public void A_ZIP_code_tells_its_state(string zipcode, string state) =>
+        Assert.Equal(state, ZipCodeStates.StateOf(zipcode));
+
     /// <summary>The cache keeps Photon's answer: each request fills it from its own text.</summary>
     [Fact]
     public async Task A_cached_answer_is_filled_from_each_request()
